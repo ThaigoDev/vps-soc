@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: vps-soc
+  datasource:
+    url: ${SOC_DB_URL:jdbc:postgresql://localhost:5432/vpssoc}
+    username: ${SOC_DB_USER:vpssoc}
+    password: ${SOC_DB_PASSWORD:vpssoc}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+
+server:
+  port: 8080
+  shutdown: graceful
+  # Trust X-Forwarded-For from the nginx container so the agent IP is recorded correctly
+  forward-headers-strategy: native
+
+management:
+  endpoints.web.exposure.include: health
+  endpoint.health.show-details: never
+
+soc:
+  # Token the agents send as "Authorization: Bearer ..."
+  agent-token: ${SOC_AGENT_TOKEN:}
+  # Token the dashboard uses to call the API
+  dashboard-token: ${SOC_DASHBOARD_TOKEN:}
+  retention:
+    event-days: ${SOC_EVENT_RETENTION_DAYS:30}
+    metric-days: ${SOC_METRIC_RETENTION_DAYS:7}
+  detection:
+    brute-force-threshold: ${SOC_BRUTE_FORCE_THRESHOLD:10}
+    brute-force-window: ${SOC_BRUTE_FORCE_WINDOW:PT1M}
+    spray-distinct-users: ${SOC_SPRAY_DISTINCT_USERS:5}
+    spray-window: PT5M
+    compromise-min-failures: ${SOC_COMPROMISE_MIN_FAILURES:5}
+    compromise-window: PT30M
+    correlation-window: PT1H
+    disk-usage-percent: ${SOC_DISK_ALERT_PERCENT:90}
+    # Host is OFFLINE after this many missed heartbeats
+    offline-missed-heartbeats: 3
+    # Comma-separated IPs whose SSH logins do not raise root/new-source incidents.
+    # Hostinger's hPanel browser terminal connects from 169.254.0.1.
+    trusted-ssh-sources: ${SOC_TRUSTED_SSH_SOURCES:}
+  telegram:
+    bot-token: ${SOC_TELEGRAM_BOT_TOKEN:}
+    chat-id: ${SOC_TELEGRAM_CHAT_ID:}
+    # Notify incidents at or above this severity (LOW, MEDIUM, HIGH, CRITICAL)
+    min-severity: ${SOC_TELEGRAM_MIN_SEVERITY:HIGH}

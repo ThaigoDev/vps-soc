@@ -1,0 +1,49 @@
+name: vps-soc
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vpssoc
+      POSTGRES_USER: vpssoc
+      POSTGRES_PASSWORD: ${SOC_DB_PASSWORD:?set SOC_DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vpssoc -d vpssoc"]
+      interval: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SOC_DB_URL: jdbc:postgresql://db:5432/vpssoc
+      SOC_DB_USER: vpssoc
+      SOC_DB_PASSWORD: ${SOC_DB_PASSWORD}
+      SOC_AGENT_TOKEN: ${SOC_AGENT_TOKEN:?set SOC_AGENT_TOKEN in .env}
+      SOC_DASHBOARD_TOKEN: ${SOC_DASHBOARD_TOKEN:?set SOC_DASHBOARD_TOKEN in .env}
+      SOC_TELEGRAM_BOT_TOKEN: ${SOC_TELEGRAM_BOT_TOKEN:-}
+      SOC_TELEGRAM_CHAT_ID: ${SOC_TELEGRAM_CHAT_ID:-}
+      SOC_TELEGRAM_MIN_SEVERITY: ${SOC_TELEGRAM_MIN_SEVERITY:-HIGH}
+      SOC_TRUSTED_SSH_SOURCES: ${SOC_TRUSTED_SSH_SOURCES:-}
+      SOC_BRUTE_FORCE_THRESHOLD: ${SOC_BRUTE_FORCE_THRESHOLD:-10}
+      SOC_EVENT_RETENTION_DAYS: ${SOC_EVENT_RETENTION_DAYS:-30}
+      JAVA_TOOL_OPTIONS: -Xmx384m
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Only reachable from this machine by default. To let the VPS agent in, bind to a
+    # private address (e.g. your Tailscale IP) or put an HTTPS reverse proxy in front.
+    ports:
+      - "${SOC_BIND:-127.0.0.1}:${SOC_PORT:-8088}:80"
+
+volumes:
+  db-data:

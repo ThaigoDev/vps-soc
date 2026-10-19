@@ -1,0 +1,6 @@
+# Keep LF everywhere: scripts, units and configs run on Linux (agent host, containers).
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.docx binary
+*.png binary
+*.jpg binary

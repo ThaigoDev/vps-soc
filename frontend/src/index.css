@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Operations-center theme: dark only, like a SOC wall. Chart series follow the validated
+   categorical order (slots 1..6, dark steps, checked against --surface); status colors are
+   reserved for severity and never used as a series. */
+:root {
+  color-scheme: dark;
+  --page: #06090c;
+  --surface: #0c1116;
+  --raised: #141b22;
+  --ink: #e6edf3;
+  --ink-2: #a9b7c4;
+  --muted: #7d8b98;
+  --line: #1d2731;
+  --axis: #2e3c48;
+  --hud: #5fb3d9; /* chrome only (headers, brackets, focus), never data */
+  --s1: #3987e5;
+  --s2: #d95926;
+  --s3: #199e70;
+  --s4: #c98500;
+  --s5: #d55181;
+  --s6: #008300;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+}
+
+/* Daylight variant (toggle in the header), stepped for the light surface. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --page: #f3f4f2;
+  --surface: #fcfcfb;
+  --raised: #eceeeb;
+  --ink: #0b0b0b;
+  --ink-2: #4a4f54;
+  --muted: #6b7076;
+  --line: #d9dcd8;
+  --axis: #b9bdb8;
+  --hud: #1d6b93;
+  --grid: rgba(29, 107, 147, 0.07);
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
+  --s5: #e87ba4;
+  --s6: #008300;
+}
+
+body {
+  background-color: var(--page);
+  background-image:
+    linear-gradient(var(--grid, rgba(95, 179, 217, 0.035)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid, rgba(95, 179, 217, 0.035)) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--ink);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Corner brackets on panels: the "targeting" frame of ops consoles. */
+.panel {
+  position: relative;
+}
+.panel::before,
+.panel::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  border-color: var(--hud);
+  opacity: 0.7;
+}
+.panel::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+.panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+}
+
+.hud-label {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@keyframes alarm-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(208, 59, 59, 0.55); }
+  50% { box-shadow: 0 0 0 10px rgba(208, 59, 59, 0); }
+}
+@keyframes alarm-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes live-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.alarm-pulse { animation: alarm-pulse 1.2s ease-out infinite; }
+.alarm-blink { animation: alarm-blink 1s steps(2, start) infinite; }
+.live-dot { animation: live-dot 2s ease-in-out infinite; }
+.alarm-stripes {
+  background-image: repeating-linear-gradient(135deg, rgba(208, 59, 59, 0.22) 0 12px, rgba(208, 59, 59, 0.08) 12px 24px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alarm-pulse, .alarm-blink, .live-dot { animation: none; }
+}
+
+:focus-visible {
+  outline: 2px solid var(--hud);
+  outline-offset: 2px;
+}
+

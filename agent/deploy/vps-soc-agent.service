@@ -1,0 +1,31 @@
+[Unit]
+Description=VPS-SOC security agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/vps-soc-agent/agent.env
+ExecStart=/usr/local/bin/vps-soc-agent
+Restart=always
+RestartSec=5
+
+# Runs as root to read the journal and map sockets to processes in /proc/*/fd,
+# but everything else is locked down.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/var/lib/vps-soc-agent
+StateDirectory=vps-soc-agent
+StateDirectoryMode=0700
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=128M
+CPUQuota=20%
+
+[Install]
+WantedBy=multi-user.target
