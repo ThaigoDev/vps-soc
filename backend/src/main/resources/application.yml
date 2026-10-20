@@ -55,3 +55,16 @@ soc:
     chat-id: ${SOC_TELEGRAM_CHAT_ID:}
     # Notify incidents at or above this severity (LOW, MEDIUM, HIGH, CRITICAL)
     min-severity: ${SOC_TELEGRAM_MIN_SEVERITY:HIGH}
+  # Active response: what the SOC asks the agent to do when an incident opens.
+  # AUTO = do it now, APPROVAL = propose it in the dashboard, OFF = never.
+  response:
+    enabled: ${SOC_RESPONSE_ENABLED:true}
+    block-brute-force: ${SOC_RESPONSE_BLOCK_BRUTE_FORCE:AUTO}
+    block-compromise: ${SOC_RESPONSE_BLOCK_COMPROMISE:AUTO}
+    kill-process: ${SOC_RESPONSE_KILL_PROCESS:APPROVAL}
+    disk-cleanup: ${SOC_RESPONSE_DISK_CLEANUP:AUTO}
+    restart-service: ${SOC_RESPONSE_RESTART_SERVICE:APPROVAL}
+    brute-force-block-ttl: ${SOC_RESPONSE_BRUTE_FORCE_TTL:PT24H}
+    compromise-block-ttl: ${SOC_RESPONSE_COMPROMISE_TTL:P7D}
+    # IPs/CIDRs never blocked (your home/office IP), on top of loopback/private/Tailscale/link-local
+    allowlist: ${SOC_RESPONSE_ALLOWLIST:}

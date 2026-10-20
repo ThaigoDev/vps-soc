@@ -8,6 +8,7 @@ import com.vpssoc.repository.HostMetricRepository;
 import com.vpssoc.repository.HostRepository;
 import com.vpssoc.repository.IncidentRepository;
 import com.vpssoc.incident.IncidentNotFoundException;
+import com.vpssoc.insight.InsightService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -30,9 +31,12 @@ public class DashboardController {
     private final HostRepository hosts;
     private final HostMetricRepository metrics;
     private final Clock clock;
+    private final InsightService insights;
 
     public DashboardController(DashboardService dashboard, IncidentService incidentService, IncidentRepository incidents,
-                               EventRepository events, HostRepository hosts, HostMetricRepository metrics, Clock clock) {
+                               EventRepository events, HostRepository hosts, HostMetricRepository metrics, Clock clock,
+                               InsightService insights) {
+        this.insights = insights;
         this.dashboard = dashboard;
         this.incidentService = incidentService;
         this.incidents = incidents;
@@ -55,6 +59,11 @@ public class DashboardController {
     @GetMapping("/dashboard/timeline")
     public List<TimelineBucket> timeline(@RequestParam(defaultValue = "24") int hours) {
         return dashboard.timeline(Math.clamp(hours, 1, 24 * 7));
+    }
+
+    @GetMapping("/dashboard/kpis")
+    public ApiDtos.Kpis kpis(@RequestParam(defaultValue = "30") int days) {
+        return dashboard.kpis(Math.clamp(days, 1, 365));
     }
 
     @GetMapping("/dashboard/top-ips")
@@ -82,7 +91,9 @@ public class DashboardController {
     @GetMapping("/incidents/{id}")
     public IncidentDetail incident(@PathVariable long id) {
         Incident inc = incidents.findById(id).orElseThrow(() -> new IncidentNotFoundException(id));
-        return new IncidentDetail(IncidentView.of(inc), events.findByIncident(id).stream().map(EventView::of).toList());
+        InsightService.Insight in = insights.insight(inc);
+        return new IncidentDetail(IncidentView.of(inc), in.events().stream().map(EventView::of).toList(), in.explanation(),
+                in.ip(), in.actions().stream().map(ActionView::of).toList());
     }
 
     @PatchMapping("/incidents/{id}")

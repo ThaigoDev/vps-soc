@@ -9,6 +9,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 [ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }
 
 install -m 0755 "$BIN" /usr/local/bin/vps-soc-agent
+
+# nftables is needed for IP blocking (installed by default on Ubuntu 22.04+/Debian 11+).
+command -v nft >/dev/null 2>&1 || { apt-get install -y nftables || echo ">> nftables not installed: IP blocking disabled"; }
 install -d -m 0700 /etc/vps-soc-agent /var/lib/vps-soc-agent
 
 if [ ! -f /etc/vps-soc-agent/agent.env ]; then

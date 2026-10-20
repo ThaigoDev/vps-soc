@@ -38,7 +38,9 @@ public final class IngestDtos {
             String agentVersion,
             Integer heartbeatIntervalSeconds,
             Metrics metrics,
-            @Size(max = 2000) List<Map<String, Object>> openPorts) {
+            @Size(max = 2000) List<Map<String, Object>> openPorts,
+            Map<String, Object> posture,
+            Map<String, Object> response) {
     }
 
     public record Metrics(
@@ -52,9 +54,27 @@ public final class IngestDtos {
             Double load1,
             Double load5,
             Double load15,
-            Long uptimeSeconds) {
+            Long uptimeSeconds,
+            Double swapPercent,
+            Double netRxBps,
+            Double netTxBps,
+            Integer tcpEstablished,
+            Integer processes) {
     }
 
     public record IngestResult(int accepted, int skipped) {
+    }
+
+    public record ActionPoll(@NotBlank @Pattern(regexp = HOST_ID_PATTERN) String hostId) {
+    }
+
+    public record ActionOrder(long id, String type, Map<String, Object> params) {
+    }
+
+    public record ActionOrders(List<ActionOrder> actions) {
+    }
+
+    public record ActionResult(@NotBlank @Pattern(regexp = HOST_ID_PATTERN) String hostId, @NotBlank String status,
+                               String output, Map<String, Object> details) {
     }
 }

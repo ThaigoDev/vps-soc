@@ -12,7 +12,8 @@ public record SocProperties(
         String dashboardToken,
         Retention retention,
         Detection detection,
-        Telegram telegram) {
+        Telegram telegram,
+        Response response) {
 
     public record Retention(int eventDays, int metricDays) {
     }
@@ -32,6 +33,25 @@ public record SocProperties(
         /** Source IPs whose SSH logins are expected (e.g. the hosting provider's web console). */
         public boolean trustedSshSource(String ip) {
             return ip != null && trustedSshSources != null && trustedSshSources.stream().map(String::trim).anyMatch(ip::equals);
+        }
+    }
+
+    /** AUTO runs without asking; APPROVAL waits for a click in the dashboard; OFF never proposes. */
+    public enum Policy { AUTO, APPROVAL, OFF }
+
+    public record Response(
+            boolean enabled,
+            Policy blockBruteForce,
+            Policy blockCompromise,
+            Policy killProcess,
+            Policy diskCleanup,
+            Policy restartService,
+            Duration bruteForceBlockTtl,
+            Duration compromiseBlockTtl,
+            List<String> allowlist) {
+
+        public Policy effective(Policy p) {
+            return enabled ? p : Policy.OFF;
         }
     }
 

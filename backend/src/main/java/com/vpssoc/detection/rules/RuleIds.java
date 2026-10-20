@@ -17,6 +17,10 @@ public final class RuleIds {
     public static final String WEB_SHELL = "WEB_SHELL";
     public static final String AGENT_OFFLINE = "AGENT_OFFLINE";
     public static final String DISK_USAGE_HIGH = "DISK_USAGE_HIGH";
+    public static final String SERVICE_FAILED = "SERVICE_FAILED";
+    public static final String SECURITY_UPDATES = "SECURITY_UPDATES";
+    public static final String REBOOT_REQUIRED = "REBOOT_REQUIRED";
+    public static final String SSH_WEAK_CONFIG = "SSH_WEAK_CONFIG";
 
     private RuleIds() {
     }

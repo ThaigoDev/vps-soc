@@ -38,6 +38,32 @@ public interface EventRepository extends JpaRepository<SecurityEvent, Long>, Jpa
     boolean existsByHostIdAndTypeAndUsernameAndSourceIpAndIdNot(
             String hostId, EventType type, String username, String sourceIp, Long id);
 
+    @Query("""
+            select count(e) > 0 from SecurityEvent e
+            where e.hostId = :hostId and e.sourceIp = :ip and e.type = com.vpssoc.domain.EventType.SSH_LOGIN_SUCCESS
+              and e.occurredAt < :before""")
+    boolean existsSuccessBefore(@Param("hostId") String hostId, @Param("ip") String ip, @Param("before") Instant before);
+
+    @Query(value = """
+            select min(occurred_at), max(occurred_at),
+                   count(*) filter (where type in ('SSH_FAILED_LOGIN', 'SSH_INVALID_USER')),
+                   count(*) filter (where type = 'SSH_LOGIN_SUCCESS'),
+                   count(distinct username) filter (where type in ('SSH_FAILED_LOGIN', 'SSH_INVALID_USER'))
+            from events where source_ip = :ip""", nativeQuery = true)
+    List<Object[]> ipTotals(@Param("ip") String ip);
+
+    @Query(value = """
+            select username, count(*) from events
+            where source_ip = :ip and username is not null and type in ('SSH_FAILED_LOGIN', 'SSH_INVALID_USER')
+            group by username order by 2 desc limit 8""", nativeQuery = true)
+    List<Object[]> ipTopUsernames(@Param("ip") String ip);
+
+    @Query(value = """
+            select username, count(*) from events
+            where occurred_at > :since and username is not null and type in ('SSH_FAILED_LOGIN', 'SSH_INVALID_USER')
+            group by username order by 2 desc limit :limit""", nativeQuery = true)
+    List<Object[]> topTargetedUsernames(@Param("since") Instant since, @Param("limit") int limit);
+
     long countByOccurredAtAfter(Instant since);
 
     long countByTypeInAndOccurredAtAfter(Collection<EventType> types, Instant since);

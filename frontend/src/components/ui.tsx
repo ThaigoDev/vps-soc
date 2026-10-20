@@ -141,4 +141,5 @@ export const eventTypeLabel: Record<string, string> = {
   FILE_DELETED: 'Arquivo removido',
   FILE_BASELINE: 'Baseline de arquivos',
   PROCESS_SUSPICIOUS: 'Processo suspeito',
+  RESPONSE_EXECUTED: 'Resposta automática',
 }

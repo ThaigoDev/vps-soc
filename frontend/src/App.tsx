@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, LogOut, Moon, Radar, Server, Shield, Siren, Sun } from 'lucide-react'
+import { Activity, LogOut, Moon, Radar, Server, Shield, ShieldCheck, Siren, Sun } from 'lucide-react'
 import { api, getToken, setToken, UnauthorizedError, type Summary } from './api'
 import { AlertControls, AlertProvider, EmergencyBanner } from './components/Alerts'
 import { threatLevel } from './components/ui'
@@ -11,10 +11,12 @@ import Incidents from './pages/Incidents'
 import IncidentDetail from './pages/IncidentDetail'
 import Events from './pages/Events'
 import Hosts from './pages/Hosts'
+import ResponsePage from './pages/Response'
 
 const nav = [
   { to: '/', label: 'Situação', Icon: Radar, end: true },
   { to: '/incidents', label: 'Incidentes', Icon: Siren },
+  { to: '/response', label: 'Resposta', Icon: ShieldCheck },
   { to: '/events', label: 'Eventos', Icon: Activity },
   { to: '/hosts', label: 'Ativos', Icon: Server },
 ]
@@ -87,6 +89,7 @@ export default function App() {
             <Route path="/incidents/:id" element={<IncidentDetail />} />
             <Route path="/events" element={<Events />} />
             <Route path="/hosts" element={<Hosts />} />
+            <Route path="/response" element={<ResponsePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
