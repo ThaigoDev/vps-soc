@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Shield } from 'lucide-react'
 import { api, setToken } from '../api'
+import { playStartup } from '../components/Alerts'
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [token, setValue] = useState('')
@@ -14,6 +15,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     try {
       await api('/auth/check', { token: token.trim() })
       setToken(token.trim())
+      void playStartup()
       onLogin()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha no login')

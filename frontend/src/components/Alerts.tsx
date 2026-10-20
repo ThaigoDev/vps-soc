@@ -8,8 +8,9 @@ import { severityRank, timeAgo } from './ui'
 /*
  * Emergency alerting. Every open incident is remembered with the severity it had when we last
  * alerted on it; a new incident, or one that escalated, at HIGH or above raises an alert:
- *   CRITICAL -> full-screen alarm with siren until someone takes it or silences it;
- *   HIGH     -> toast with a short beep.
+ *   CRITICAL -> full-screen alarm with a looping alarm sound until someone takes it or silences it;
+ *   HIGH     -> toast with a short alert sound.
+ * Sound effects live in public/sounds (see SFX); the synth siren is only a fallback.
  * Both also fire a browser notification (when allowed) and flash the tab title.
  */
 
@@ -89,7 +90,7 @@ function tone(freqFrom: number, freqTo: number, start: number, duration: number,
   osc.stop(t + duration + 0.05)
 }
 
-/** One cycle of a two-tone siren (~1.4s). */
+/** One cycle of a two-tone siren (~1.4s): fallback when the sound files cannot load. */
 function sirenCycle() {
   tone(650, 1250, 0, 0.6)
   tone(1250, 650, 0.65, 0.6)
@@ -100,6 +101,61 @@ function beep() {
   tone(880, 880, 0.2, 0.12, 0.12)
 }
 
+// ---- sound effects -------------------------------------------------------------------------
+
+/** Clips cut from the futuristic UI sound pack (public/sounds), one per kind of moment. */
+const SFX = {
+  startup: '/sounds/startup.mp3', // power-up swell ending in an impact: entering the console
+  alarm: '/sounds/alarm-critical.mp3', // rising chirp with harmonics, looped while a CRITICAL alarm is up
+  high: '/sounds/alert-high.mp3', // low hit + chime: HIGH toast
+  success: '/sounds/action-success.mp3', // short upward blip: a containment action succeeded
+  linkLost: '/sounds/link-lost.mp3', // digital glitch: the dashboard lost the backend
+  click: '/sounds/click.mp3', // tick: confirmations
+} as const
+
+export type Sfx = keyof typeof SFX
+
+const buffers = new Map<Sfx, Promise<AudioBuffer | null>>()
+
+function loadSfx(name: Sfx): Promise<AudioBuffer | null> {
+  const ctx = audioContext()
+  if (!ctx) return Promise.resolve(null)
+  let p = buffers.get(name)
+  if (!p) {
+    p = fetch(SFX[name])
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.statusText))))
+      .then((b) => ctx.decodeAudioData(b))
+      .catch(() => null)
+    buffers.set(name, p)
+  }
+  return p
+}
+
+/** Plays a clip; returns false when it could not (audio locked or file missing). */
+async function playSfx(name: Sfx, volume = 0.8): Promise<boolean> {
+  const ctx = audioContext()
+  if (!ctx || ctx.state !== 'running') return false
+  const buf = await loadSfx(name)
+  if (!buf) return false
+  const src = ctx.createBufferSource()
+  const gain = ctx.createGain()
+  gain.gain.value = volume
+  src.buffer = buf
+  src.connect(gain).connect(ctx.destination)
+  src.start()
+  return true
+}
+
+function soundOn(): boolean {
+  return load<Settings>(SETTINGS_KEY)?.sound ?? true
+}
+
+/** For screens outside the alert provider (login): plays only when sound is enabled. */
+export async function playStartup() {
+  unlockAudio()
+  if (soundOn()) await playSfx('startup', 0.7)
+}
+
 // ---- context -----------------------------------------------------------------------------
 
 interface AlertState {
@@ -108,6 +164,8 @@ interface AlertState {
   setNotify: (on: boolean) => Promise<void>
   notifyPermission: NotificationPermission | 'unsupported'
   testAlarm: () => void
+  /** Plays a sound effect if the operator has sound on. */
+  play: (name: Sfx) => void
 }
 
 const AlertContext = createContext<AlertState | null>(null)
@@ -150,9 +208,24 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   }
 
   const setSound = (on: boolean) => {
-    if (on) unlockAudio()
+    if (on) {
+      unlockAudio()
+      void playSfx('click', 0.6)
+    }
     update({ ...settingsRef.current, sound: on })
   }
+
+  const play = useCallback((name: Sfx) => {
+    if (settingsRef.current.sound) void playSfx(name, name === 'click' ? 0.6 : 0.8)
+  }, [])
+
+  // Decode the clips once audio is available, so the first alarm plays without delay.
+  useEffect(() => {
+    const warm = () => (Object.keys(SFX) as Sfx[]).forEach((n) => void loadSfx(n))
+    warm()
+    window.addEventListener('pointerdown', warm, { once: true })
+    return () => window.removeEventListener('pointerdown', warm)
+  }, [])
 
   const setNotify = async (on: boolean) => {
     if (on && 'Notification' in window && Notification.permission !== 'granted') {
@@ -180,7 +253,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
       setAlarms((a) => (a.some((x) => x.id === inc.id) ? a : [...a, inc]))
     } else {
       setToasts((t) => (t.some((x) => x.id === inc.id) ? t : [...t, inc]))
-      if (settingsRef.current.sound) beep()
+      if (settingsRef.current.sound) void playSfx('high').then((ok) => ok || beep())
       window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== inc.id)), 20_000)
     }
     if (settingsRef.current.notify && 'Notification' in window && Notification.permission === 'granted' && inc.id > 0) {
@@ -226,13 +299,27 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     save(SEEN_KEY, next)
   }, [q.data, raise])
 
-  // Siren while a critical alarm is on screen.
+  // Alarm loop while a critical alarm is on screen (synth siren if the clip cannot play).
   useEffect(() => {
     if (alarms.length === 0 || !settings.sound) return
-    sirenCycle()
-    const t = window.setInterval(sirenCycle, 1_600)
+    const cycle = () => void playSfx('alarm', 0.9).then((ok) => ok || sirenCycle())
+    cycle()
+    const t = window.setInterval(cycle, 1_600)
     return () => window.clearInterval(t)
   }, [alarms.length, settings.sound])
+
+  // Short confirmation when a containment action succeeds (IP blocked, process killed...).
+  const actions = useQuery({
+    queryKey: ['actions', 'sound-watch'],
+    queryFn: () => api<Page<{ id: number }>>(`/response/actions${qs({ status: 'SUCCEEDED', size: 1 })}`),
+    refetchInterval: 10_000,
+  })
+  const lastAction = useRef<number | null>(null)
+  useEffect(() => {
+    const top = actions.data?.content[0]?.id ?? 0
+    if (lastAction.current !== null && top > lastAction.current) play('success')
+    if (actions.data) lastAction.current = top
+  }, [actions.data, play])
 
   // Flash the tab title while alarms are pending.
   useEffect(() => {
@@ -253,7 +340,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   }, [alarms.length])
 
   const value = useMemo(
-    () => ({ settings, setSound, setNotify, notifyPermission, testAlarm }),
+    () => ({ settings, setSound, setNotify, notifyPermission, testAlarm, play }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [settings, notifyPermission],
   )

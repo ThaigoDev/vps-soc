@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ban, Boxes, Check, CheckCircle2, Clock, Copy, Cpu, Eraser, Hourglass, RotateCcw, ShieldCheck, Unlock, X, XCircle } from 'lucide-react'
 import { api, type ActionStatus, type ActionType, type Policy, type ResponseAction } from '../api'
 import { ErrorNote, fmtTime, timeAgo } from './ui'
+import { useAlertSettings } from './Alerts'
 
 const statusStyle: Record<ActionStatus, { label: string; color: string; Icon: typeof Check }> = {
   PROPOSED: { label: 'Aguardando aprovação', color: 'var(--warning)', Icon: Hourglass },
@@ -56,6 +57,7 @@ export function useActionMutations() {
 /** One response action: what, why, who decided, outcome, and approve/dismiss when it waits. */
 export function ActionCard({ a, showIncident = false }: { a: ResponseAction; showIncident?: boolean }) {
   const { approve, dismiss } = useActionMutations()
+  const { play } = useAlertSettings()
   const Icon = actionIcon[a.type]
   const who = a.origin === 'AGENT' ? 'pelo agente (guarda local)' : a.mode === 'AUTO' ? 'automático' : 'manual'
   const busy = approve.isPending || dismiss.isPending
@@ -75,7 +77,7 @@ export function ActionCard({ a, showIncident = false }: { a: ResponseAction; sho
       {a.result && <p className="mt-1 break-words font-mono text-xs text-ink">{a.result}</p>}
       {a.status === 'PROPOSED' && (
         <div className="mt-2 flex gap-2">
-          <button onClick={() => approve.mutate(a.id)} disabled={busy}
+          <button onClick={() => { play('click'); approve.mutate(a.id) }} disabled={busy}
             className="hud-label flex items-center gap-1 rounded-sm border border-good px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-raised disabled:opacity-50">
             <ShieldCheck size={13} aria-hidden /> Aprovar e executar
           </button>

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, Boxes, LogOut, Moon, Radar, Server, Shield, ShieldCheck, Siren, Sun } from 'lucide-react'
 import { api, getToken, setToken, UnauthorizedError, type Summary } from './api'
-import { AlertControls, AlertProvider, EmergencyBanner } from './components/Alerts'
+import { AlertControls, AlertProvider, EmergencyBanner, useAlertSettings } from './components/Alerts'
 import { threatLevel } from './components/ui'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
@@ -121,6 +121,12 @@ function LinkStatus() {
   const fetching = useIsFetching()
   const q = useQuery({ queryKey: ['summary'], queryFn: () => api<Summary>('/dashboard/summary'), refetchInterval: 10_000 })
   const down = q.isError
+  const { play } = useAlertSettings()
+  const wasDown = useRef(false)
+  useEffect(() => {
+    if (down && !wasDown.current) play('linkLost') // the backend stopped answering
+    wasDown.current = down
+  }, [down, play])
   return (
     <span className="hud-label hidden items-center gap-1.5 text-muted md:flex" title={down ? 'Sem resposta do backend' : 'Conectado ao backend'}>
       <span className={`inline-block h-2 w-2 rounded-full ${down ? '' : 'live-dot'}`} style={{ background: down ? 'var(--critical)' : 'var(--good)' }} aria-hidden />
