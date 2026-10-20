@@ -121,9 +121,9 @@ export function IncidentTrend({ className }: { className?: string }) {
   const q = useKpis(14)
   const data = q.data?.daily.map((d) => ({ ...d, label: d.day.slice(8, 10) + '/' + d.day.slice(5, 7) }))
   return (
-    <Card className={className} title="Incidentes por dia · abertos × fechados">
+    <Card fill className={className} title="Incidentes por dia · abertos × fechados">
       {q.error && <ErrorNote error={q.error} />}
-      <div className="h-56">
+      <div className="min-h-56 flex-1">
         {data && (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barGap={2} barCategoryGap="25%">
