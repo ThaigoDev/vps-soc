@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { Crosshair, Server, Terminal } from 'lucide-react'
 import { api, qs, type Host, type Incident, type Page, type SecurityEvent, type Severity, type SourceIpStats, type Summary, type TimelineBucket } from '../api'
 import { MitreMatrix } from '../components/MitreMatrix'
+import { ApprovalBanner, CheckList, IncidentTrend, SocKpis, TopDetections, postureChecks } from '../components/SocMetrics'
 import { Card, Empty, ErrorNote, RiskBar, SeverityBadge, chartTooltip, eventTypeLabel, severityStyle, threatLevel, timeAgo } from '../components/ui'
 
 const REFRESH = 10_000
@@ -38,10 +39,16 @@ export default function Overview() {
   return (
     <div className="space-y-4">
       {summary.error && <ErrorNote error={summary.error} />}
+      <ApprovalBanner />
       {summary.data && <Headline s={summary.data} />}
+      <SocKpis />
       <div className="grid gap-4 xl:grid-cols-3">
         <Timeline className="xl:col-span-2" />
         <SeverityPanel s={summary.data} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-3">
+        <IncidentTrend className="xl:col-span-2" />
+        <TopDetections />
       </div>
       <Card title={<><Crosshair size={13} aria-hidden /> Matriz MITRE ATT&amp;CK · incidentes ativos</>}>
         {active.error && <ErrorNote error={active.error} />}
@@ -366,8 +373,9 @@ function AssetHealth() {
                 </div>
               )}
               <p className="mt-1.5 font-mono text-[11px] text-muted">
-                {h.openPorts?.length ?? 0} portas · {h.os ?? '?'}
+                {h.openPorts?.length ?? 0} portas · {h.posture?.sessions?.length ?? 0} sessões · {h.os ?? '?'}
               </p>
+              {online && <div className="mt-3 border-t border-line pt-3"><CheckList checks={postureChecks(h)} /></div>}
             </li>
           )
         })}

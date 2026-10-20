@@ -8,9 +8,11 @@ import com.vpssoc.domain.EventType;
 import com.vpssoc.domain.SecurityEvent;
 import com.vpssoc.domain.Severity;
 import com.vpssoc.repository.EventRepository;
+import com.vpssoc.repository.IpBlockRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -23,11 +25,15 @@ import java.util.Set;
 public class SshBruteForceRule implements DetectionRule {
 
     private final EventRepository events;
+    private final IpBlockRepository blocks;
     private final SocProperties.Detection cfg;
+    private final Clock clock;
 
-    public SshBruteForceRule(EventRepository events, SocProperties props) {
+    public SshBruteForceRule(EventRepository events, IpBlockRepository blocks, SocProperties props, Clock clock) {
         this.events = events;
+        this.blocks = blocks;
         this.cfg = props.detection();
+        this.clock = clock;
     }
 
     @Override
@@ -46,7 +52,9 @@ public class SshBruteForceRule implements DetectionRule {
         Instant from = to.minus(cfg.bruteForceWindow());
         long failures = events.countByHostIdAndSourceIpAndTypeInAndOccurredAtBetween(host, ip, EventType.SSH_FAILURES, from, to);
 
-        if (failures < cfg.bruteForceThreshold()) {
+        // Failures from an address that is already blocked are log lines still in flight from before the
+        // block (same batch, or replayed after an agent restart): evidence, not a new attack.
+        if (failures < cfg.bruteForceThreshold() || blocks.active(host, ip, clock.instant()).isPresent()) {
             return List.of(Detection.attachIfActive(host, RuleIds.SSH_BRUTE_FORCE, ip).build());
         }
 

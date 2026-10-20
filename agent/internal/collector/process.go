@@ -138,7 +138,7 @@ func processEvent(p, parent ProcInfo, reason string, ts time.Time) event.Event {
 		Message: fmt.Sprintf("suspicious process (%s): %s pid %d exe %s parent %s pid %d",
 			reason, p.Comm, p.PID, p.Exe, parent.Comm, p.PPID),
 		Metadata: map[string]any{
-			"reason": reason, "pid": p.PID, "ppid": p.PPID, "comm": p.Comm, "exe": p.Exe,
+			"reason": reason, "pid": p.PID, "ppid": p.PPID, "startTime": p.StartTime, "comm": p.Comm, "exe": p.Exe,
 			"cmdline": p.Cmdline, "uid": p.UID, "user": p.User,
 			"parentComm": parent.Comm, "parentExe": parent.Exe, "parentUser": parent.User,
 		},

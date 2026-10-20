@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, type Host, type MetricPoint } from '../api'
-import { Card, Empty, ErrorNote, fmtBytes, timeAgo } from '../components/ui'
+import { Card, Empty, ErrorNote, chartTooltip, fmtBytes, fmtTime, timeAgo } from '../components/ui'
+import { CheckList, postureChecks } from '../components/SocMetrics'
 
 export default function Hosts() {
   const q = useQuery({ queryKey: ['hosts'], queryFn: () => api<Host[]>('/hosts'), refetchInterval: 10_000 })
@@ -44,7 +45,48 @@ function HostCard({ host: h }: { host: Host }) {
         </div>
       </div>
 
-      <MetricsChart hostId={h.id} />
+      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-line pt-4 sm:grid-cols-3 lg:grid-cols-6">
+        <Figure label="Swap" value={m.swapPercent !== undefined ? `${m.swapPercent.toFixed(1)}%` : '-'} hint="uso alto = falta de RAM" />
+        <Figure label="Rede ↓ entrada" value={fmtRate(m.netRxBps)} />
+        <Figure label="Rede ↑ saída" value={fmtRate(m.netTxBps)} hint="pico inesperado: exfiltração ou DDoS saindo" />
+        <Figure label="Conexões TCP" value={m.tcpEstablished ?? '-'} hint="estabelecidas agora" />
+        <Figure label="Processos" value={m.processes ?? '-'} />
+        <Figure label="Sessões abertas" value={h.posture?.sessions?.length ?? '-'} hint="usuários logados (who)" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <MetricsChart hostId={h.id} />
+        <NetworkChart hostId={h.id} />
+      </div>
+
+      <div className="mt-5 grid gap-6 lg:grid-cols-2">
+        <div>
+          <h3 className="hud-label mb-2 text-[11px] font-semibold text-hud">Postura de segurança</h3>
+          <CheckList checks={postureChecks(h)} />
+          {h.response && (
+            <p className="mt-3 text-xs text-muted">
+              Resposta ativa no agente: {h.response.enabled ? 'ligada' : 'desligada'} · guarda local de brute force: {h.response.autoBlock ? 'ligada' : 'desligada'}
+            </p>
+          )}
+        </div>
+        <div>
+          <h3 className="hud-label mb-2 text-[11px] font-semibold text-hud">Sessões interativas ({h.posture?.sessions?.length ?? 0})</h3>
+          {h.posture?.sessions && h.posture.sessions.length > 0 ? (
+            <ul className="space-y-1 font-mono text-xs">
+              {h.posture.sessions.map((s) => (
+                <li key={s.tty + s.loginAt} className="flex flex-wrap gap-x-3 border-b border-line py-1">
+                  <span className="font-semibold">{s.user}</span>
+                  <span className="text-ink2">{s.tty}</span>
+                  <span className="text-ink2">{s.host || 'local'}</span>
+                  <span className="ml-auto text-muted">{fmtTime(s.loginAt)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted">Ninguém logado agora.</p>
+          )}
+        </div>
+      </div>
 
       <h3 className="mb-2 mt-5 text-sm font-semibold">Portas em escuta ({h.openPorts?.length ?? 0})</h3>
       {h.openPorts && h.openPorts.length > 0 ? (
@@ -127,6 +169,62 @@ function MetricsChart({ hostId }: { hostId: string }) {
           />
           <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, color: 'var(--ink-2)' }} />
           {lines.map((l) => (
+            <Line key={l.key} dataKey={l.key} name={l.label} stroke={l.color} strokeWidth={2} dot={false} isAnimationActive={false}
+              activeDot={{ r: 4, stroke: 'var(--surface)', strokeWidth: 2 }} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function Figure({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+  return (
+    <div title={hint}>
+      <p className="text-xs text-ink2">{label}</p>
+      <p className="tnum mt-1 font-mono text-xl font-semibold">{value}</p>
+      {hint && <p className="text-[10px] leading-tight text-muted">{hint}</p>}
+    </div>
+  )
+}
+
+function fmtRate(bps?: number): string {
+  if (bps === undefined) return '-'
+  if (bps < 1024) return `${bps.toFixed(0)} B/s`
+  if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`
+  return `${(bps / 1024 / 1024).toFixed(2)} MB/s`
+}
+
+// Network throughput in its own chart (different unit from the % chart: never a dual axis).
+const netLines = [
+  { key: 'rxKB', label: 'Entrada KB/s', color: 'var(--s1)' },
+  { key: 'txKB', label: 'Saída KB/s', color: 'var(--s2)' },
+] as const
+
+function NetworkChart({ hostId }: { hostId: string }) {
+  const q = useQuery({
+    queryKey: ['metrics', hostId],
+    queryFn: () => api<MetricPoint[]>(`/hosts/${encodeURIComponent(hostId)}/metrics?hours=24`),
+    refetchInterval: 30_000,
+  })
+  const data = q.data
+    ?.filter((p) => p.netRx !== undefined && p.netRx !== null)
+    .map((p) => ({
+      label: new Date(p.t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      rxKB: Math.round(((p.netRx ?? 0) / 1024) * 10) / 10,
+      txKB: Math.round(((p.netTx ?? 0) / 1024) * 10) / 10,
+    }))
+  if (!data || data.length < 2) return null
+  return (
+    <div className="mt-5 h-48">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="var(--line)" />
+          <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 11 }} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} minTickGap={40} />
+          <YAxis tick={{ fill: 'var(--muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
+          <Tooltip cursor={{ stroke: 'var(--axis)' }} {...chartTooltip} />
+          <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, color: 'var(--ink-2)' }} />
+          {netLines.map((l) => (
             <Line key={l.key} dataKey={l.key} name={l.label} stroke={l.color} strokeWidth={2} dot={false} isAnimationActive={false}
               activeDot={{ r: 4, stroke: 'var(--surface)', strokeWidth: 2 }} />
           ))}

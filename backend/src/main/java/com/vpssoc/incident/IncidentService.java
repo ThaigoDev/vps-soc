@@ -65,6 +65,7 @@ public class IncidentService {
             inc.setRiskScore(Math.max(inc.getRiskScore(), d.riskScore()));
             inc.addTechniques(d.techniques());
             link(inc, trigger, seenAt, now);
+            publisher.publishEvent(new IncidentChanged(inc, trigger, false));
             if (escalated) {
                 publisher.publishEvent(new IncidentNotification(inc.getId(), IncidentNotification.Kind.ESCALATED));
             }
@@ -93,6 +94,7 @@ public class IncidentService {
             incidents.earliestEvidence(inc.getId()).ifPresent(inc::backdateFirstSeen);
         }
         log.info("Incident #{} {} [{}] {}", inc.getId(), d.ruleId(), d.severity(), d.title());
+        publisher.publishEvent(new IncidentChanged(inc, trigger, true));
         publisher.publishEvent(new IncidentNotification(inc.getId(), IncidentNotification.Kind.CREATED));
     }
 

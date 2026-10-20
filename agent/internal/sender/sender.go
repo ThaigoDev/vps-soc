@@ -152,7 +152,41 @@ func (s *Sender) SendHeartbeat(ctx context.Context, hb any) error {
 	return s.post(ctx, "/api/v1/ingest/heartbeat", hb)
 }
 
+// PollActions asks the backend for response actions queued for this host.
+func (s *Sender) PollActions(ctx context.Context, out any) error {
+	if s.DryRun {
+		return nil
+	}
+	return s.postJSON(ctx, "/api/v1/ingest/actions/poll", map[string]any{"hostId": s.HostID}, out)
+}
+
+// ReportAction sends the outcome of one response action.
+func (s *Sender) ReportAction(ctx context.Context, id int64, result any) error {
+	if s.DryRun {
+		b, _ := json.Marshal(result)
+		fmt.Printf("action %d result: %s\n", id, b)
+		return nil
+	}
+	// The token is shared by all agents, so the host id travels with the result and the
+	// SOC checks the action belongs to that host.
+	var body map[string]any
+	b, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(b, &body); err != nil {
+		return err
+	}
+	body["hostId"] = s.HostID
+	return s.post(ctx, fmt.Sprintf("/api/v1/ingest/actions/%d/result", id), body)
+}
+
 func (s *Sender) post(ctx context.Context, path string, body any) error {
+	return s.postJSON(ctx, path, body, nil)
+}
+
+// postJSON posts body and, when out is non-nil, decodes the JSON response into it.
+func (s *Sender) postJSON(ctx context.Context, path string, body any, out any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -171,6 +205,9 @@ func (s *Sender) post(ctx context.Context, path string, body any) error {
 	if resp.StatusCode/100 != 2 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return fmt.Errorf("%s returned %d: %s", path, resp.StatusCode, bytes.TrimSpace(msg))
+	}
+	if out != nil && resp.StatusCode != http.StatusNoContent {
+		return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
 	}
 	return nil
 }

@@ -7,6 +7,8 @@ import com.vpssoc.domain.*;
 import com.vpssoc.repository.EventRepository;
 import com.vpssoc.repository.HostRepository;
 import com.vpssoc.repository.IncidentRepository;
+import com.vpssoc.repository.IpBlockRepository;
+import com.vpssoc.repository.ResponseActionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,8 +25,13 @@ public class DashboardService {
     private final IncidentRepository incidents;
     private final HostRepository hosts;
     private final Clock clock;
+    private final ResponseActionRepository actions;
+    private final IpBlockRepository blocks;
 
-    public DashboardService(EventRepository events, IncidentRepository incidents, HostRepository hosts, Clock clock) {
+    public DashboardService(EventRepository events, IncidentRepository incidents, HostRepository hosts, Clock clock,
+                            ResponseActionRepository actions, IpBlockRepository blocks) {
+        this.actions = actions;
+        this.blocks = blocks;
         this.events = events;
         this.incidents = incidents;
         this.hosts = hosts;
@@ -77,7 +84,7 @@ public class DashboardService {
                 case AUTH_SUCCESS -> 1;
                 case PRIVILEGE -> 2;
                 case NETWORK -> 3;
-                case AGENT -> 4;
+                case AGENT, RESPONSE -> 4;
                 case FILE, PROCESS -> 5;
             };
             b[idx] += ((Number) row[2]).longValue();
@@ -96,8 +103,72 @@ public class DashboardService {
                 .toList();
     }
 
+    /**
+     * SOC performance over the last {@code days}: mean time to detect (first evidence → incident),
+     * acknowledge, contain and resolve, false-positive rate, how much was contained without a
+     * human, response activity and the current exposure.
+     */
+    public ApiDtos.Kpis kpis(int days) {
+        Instant now = clock.instant();
+        Instant since = now.minus(Duration.ofDays(days));
+        Object[] k = incidents.kpis(since).stream().findFirst().orElse(new Object[10]);
+        long opened = num(k[4]);
+        long fp = num(k[6]);
+        long contained = num(k[7]);
+        long auto = num(k[8]);
+
+        long actionsAuto = 0, actionsManual = 0, actionsFailed = 0;
+        for (Object[] r : actions.countByStatusAndMode(since)) {
+            ResponseAction.Status st = (ResponseAction.Status) r[0];
+            long n = num(r[2]);
+            if (st == ResponseAction.Status.SUCCEEDED) {
+                if (r[1] == ResponseAction.Mode.AUTO) actionsAuto += n;
+                else actionsManual += n;
+            } else if (st == ResponseAction.Status.FAILED || st == ResponseAction.Status.REJECTED) {
+                actionsFailed += n;
+            }
+        }
+
+        long dropped = 0;
+        long maxLag = 0;
+        for (Host h : hosts.findAll()) {
+            maxLag = Math.max(maxLag, Duration.between(h.getLastSeen(), now).toSeconds());
+            if (h.getPosture() != null && h.getPosture().get("firewall") instanceof Map<?, ?> fw
+                    && fw.get("droppedPackets") instanceof Number n) {
+                dropped += n.longValue();
+            }
+        }
+
+        Map<String, long[]> perDay = new TreeMap<>();
+        LocalDate today = LocalDate.now(ZoneId.of("America/Sao_Paulo"));
+        for (int d = Math.min(days, 14) - 1; d >= 0; d--) {
+            perDay.put(today.minusDays(d).toString(), new long[2]);
+        }
+        incidents.openedPerDay(since).forEach(r -> Optional.ofNullable(perDay.get((String) r[0])).ifPresent(a -> a[0] += num(r[1])));
+        incidents.closedPerDay(since).forEach(r -> Optional.ofNullable(perDay.get((String) r[0])).ifPresent(a -> a[1] += num(r[1])));
+
+        return new ApiDtos.Kpis(days, dbl(k[0]), dbl(k[1]), dbl(k[2]), dbl(k[3]),
+                opened, num(k[5]), fp, opened == 0 ? 0 : (double) fp / opened,
+                contained, auto, contained == 0 ? 0 : (double) auto / contained, num(k[9]),
+                actionsAuto, actionsManual, actionsFailed, actions.countByStatus(ResponseAction.Status.PROPOSED),
+                blocks.findAllActive(now).size(), dropped,
+                events.countByOccurredAtAfter(now.minus(Duration.ofHours(1))) / 60.0, maxLag,
+                incidents.byRule(since).stream().map(r -> new ApiDtos.RuleCount((String) r[0], num(r[1]), num(r[2]))).toList(),
+                events.topTargetedUsernames(now.minus(Duration.ofHours(24)), 8).stream()
+                        .map(r -> new ApiDtos.NameCount((String) r[0], num(r[1]))).toList(),
+                perDay.entrySet().stream().map(e -> new ApiDtos.DayCount(e.getKey(), e.getValue()[0], e.getValue()[1])).toList());
+    }
+
+    private static long num(Object o) {
+        return o instanceof Number n ? n.longValue() : 0;
+    }
+
+    private static Double dbl(Object o) {
+        return o instanceof Number n ? n.doubleValue() : null;
+    }
+
     /** Native queries return different temporal types depending on driver/Hibernate version. */
-    static Instant toInstant(Object o) {
+    public static Instant toInstant(Object o) {
         return switch (o) {
             case null -> null;
             case Instant i -> i;

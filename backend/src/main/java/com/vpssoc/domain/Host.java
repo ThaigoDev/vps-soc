@@ -34,6 +34,12 @@ public class Host {
     @JdbcTypeCode(SqlTypes.JSON)
     private List<Map<String, Object>> openPorts;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, Object> posture;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, Object> response;
+
     protected Host() {
     }
 
@@ -63,4 +69,8 @@ public class Host {
     public void setMetrics(Map<String, Object> metrics) { this.metrics = metrics; }
     public List<Map<String, Object>> getOpenPorts() { return openPorts; }
     public void setOpenPorts(List<Map<String, Object>> openPorts) { this.openPorts = openPorts; }
+    public Map<String, Object> getPosture() { return posture; }
+    public void setPosture(Map<String, Object> posture) { this.posture = posture; }
+    public Map<String, Object> getResponse() { return response; }
+    public void setResponse(Map<String, Object> response) { this.response = response; }
 }

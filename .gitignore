@@ -7,3 +7,4 @@ frontend/dist/
 .idea/
 .vscode/
 *.tsbuildinfo
+backups/

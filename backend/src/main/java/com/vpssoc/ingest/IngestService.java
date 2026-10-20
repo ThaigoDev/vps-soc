@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vpssoc.config.SocProperties;
 import com.vpssoc.detection.Detection;
 import com.vpssoc.detection.DetectionEngine;
+import com.vpssoc.detection.PostureEvaluator;
+import com.vpssoc.response.ResponseService;
 import com.vpssoc.detection.rules.RuleIds;
 import com.vpssoc.domain.*;
 import com.vpssoc.incident.IncidentService;
@@ -45,10 +47,14 @@ public class IngestService {
     private final SocProperties props;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final PostureEvaluator posture;
+    private final ResponseService response;
 
     public IngestService(HostRepository hosts, EventRepository events, HostMetricRepository metrics,
                          DetectionEngine engine, IncidentService incidents, SocProperties props,
-                         ObjectMapper mapper, Clock clock) {
+                         ObjectMapper mapper, Clock clock, PostureEvaluator posture, ResponseService response) {
+        this.posture = posture;
+        this.response = response;
         this.hosts = hosts;
         this.events = events;
         this.metrics = metrics;
@@ -76,7 +82,12 @@ public class IngestService {
                     cleanIp(in.sourceIp()), truncate(in.username(), 255), truncate(in.message(), MAX_TEXT), in.metadata()));
         }
         events.saveAll(saved);
-        saved.forEach(engine::process);
+        for (SecurityEvent e : saved) {
+            engine.process(e);
+            if (e.getType() == EventType.RESPONSE_EXECUTED) {
+                response.recordAgentAction(e);
+            }
+        }
         if (skipped > 0) {
             log.warn("Host {} sent {} events of unknown type", hostId, skipped);
         }
@@ -94,14 +105,18 @@ public class IngestService {
             host.setHeartbeatIntervalSeconds(hb.heartbeatIntervalSeconds());
         }
         host.setOpenPorts(hb.openPorts());
+        host.setPosture(hb.posture());
+        host.setResponse(hb.response());
 
         var m = hb.metrics();
         if (m != null) {
             host.setMetrics(mapper.convertValue(m, new TypeReference<Map<String, Object>>() {
             }));
-            metrics.save(new HostMetric(host.getId(), now, m.cpuPercent(), m.memPercent(), m.diskPercent(), m.load1()));
+            metrics.save(new HostMetric(host.getId(), now, m.cpuPercent(), m.memPercent(), m.diskPercent(), m.load1())
+                    .withExtras(m.swapPercent(), m.netRxBps(), m.netTxBps(), m.tcpEstablished(), m.processes()));
             checkDisk(host, m.diskPercent());
         }
+        posture.evaluate(host.getId(), hb.posture());
     }
 
     private Host touchHost(String hostId, String remoteIp, Instant now) {

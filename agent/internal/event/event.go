@@ -20,6 +20,10 @@ const (
 	FileDeleted       = "FILE_DELETED"
 	FileBaseline      = "FILE_BASELINE"
 	ProcessSuspicious = "PROCESS_SUSPICIOUS"
+
+	// ResponseExecuted reports a containment action the agent took on its own
+	// (e.g. the local brute-force guard blocking an IP while the SOC was offline).
+	ResponseExecuted = "RESPONSE_EXECUTED"
 )
 
 type Event struct {

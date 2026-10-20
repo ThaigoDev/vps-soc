@@ -1,6 +1,6 @@
 export type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'FALSE_POSITIVE'
-export type EventCategory = 'AUTH_FAILURE' | 'AUTH_SUCCESS' | 'PRIVILEGE' | 'NETWORK' | 'AGENT' | 'FILE' | 'PROCESS'
+export type EventCategory = 'AUTH_FAILURE' | 'AUTH_SUCCESS' | 'PRIVILEGE' | 'NETWORK' | 'AGENT' | 'FILE' | 'PROCESS' | 'RESPONSE'
 
 export interface Page<T> {
   content: T[]
@@ -34,6 +34,9 @@ export interface Incident {
   createdAt: string
   resolvedAt?: string
   resolutionNote?: string
+  acknowledgedAt?: string
+  containedAt?: string
+  containmentNote?: string
 }
 
 export interface SecurityEvent {
@@ -107,8 +110,25 @@ export interface Host {
     diskTotalBytes?: number
     load1?: number
     uptimeSeconds?: number
+    swapPercent?: number
+    netRxBps?: number
+    netTxBps?: number
+    tcpEstablished?: number
+    processes?: number
   }
   openPorts?: OpenPort[]
+  posture?: Posture
+  response?: { enabled?: boolean; autoBlock?: boolean }
+}
+
+export interface Posture {
+  sessions?: { user: string; tty: string; host?: string; loginAt: string }[]
+  pendingUpdates?: number
+  securityUpdates?: number
+  rebootRequired?: boolean
+  failedUnits?: string[]
+  ssh?: { permitRootLogin?: string; passwordAuthentication?: string; maxAuthTries?: string }
+  firewall?: { enabled?: boolean; blockedIps?: number; droppedPackets?: number; droppedBytes?: number }
 }
 
 export interface MetricPoint {
@@ -117,6 +137,11 @@ export interface MetricPoint {
   mem?: number
   disk?: number
   load1?: number
+  swap?: number
+  netRx?: number
+  netTx?: number
+  tcp?: number
+  processes?: number
 }
 
 const TOKEN_KEY = 'vps-soc-token'
@@ -168,4 +193,116 @@ export function qs(params: Record<string, string | number | undefined | null>) {
   }
   const out = s.toString()
   return out ? `?${out}` : ''
+}
+
+// ---- explanations & active response ------------------------------------------------------
+
+export interface Explanation {
+  summary?: string
+  impact?: string
+  riskFactors: string[]
+  evidence: { label: string; value: string }[]
+  response?: string
+  recommendations: { title: string; detail?: string; command?: string }[]
+  falsePositive?: string
+}
+
+export interface IpProfile {
+  ip: string
+  kind: 'LOOPBACK' | 'PRIVATE' | 'TAILSCALE' | 'LINK_LOCAL' | 'PUBLIC' | 'INVALID'
+  kindLabel: string
+  protectedBy?: string
+  trustedSource: boolean
+  firstSeen?: string
+  lastSeen?: string
+  failures: number
+  successes: number
+  usernamesTried: number
+  topUsernames: { username: string; attempts: number }[]
+  incidents: number
+  blockedUntil?: string
+  blockOrigin?: 'SOC' | 'AGENT'
+  everLoggedIn: boolean
+}
+
+export type ActionStatus = 'PROPOSED' | 'PENDING' | 'SENT' | 'SUCCEEDED' | 'FAILED' | 'REJECTED' | 'DISMISSED' | 'EXPIRED'
+export type ActionType = 'BLOCK_IP' | 'UNBLOCK_IP' | 'KILL_PROCESS' | 'DISK_CLEANUP' | 'RESTART_SERVICE'
+
+export interface ResponseAction {
+  id: number
+  hostId: string
+  incidentId?: number
+  type: ActionType
+  label: string
+  target: string
+  params: Record<string, unknown>
+  status: ActionStatus
+  mode: 'AUTO' | 'MANUAL'
+  origin: 'SOC' | 'AGENT'
+  reason?: string
+  result?: string
+  details?: Record<string, unknown>
+  createdAt: string
+  decidedAt?: string
+  completedAt?: string
+}
+
+export interface IpBlock {
+  id: number
+  hostId: string
+  ip: string
+  reason?: string
+  origin: 'SOC' | 'AGENT'
+  incidentId?: number
+  createdAt: string
+  expiresAt: string
+}
+
+export interface IncidentDetailData {
+  incident: Incident
+  events: SecurityEvent[]
+  explanation: Explanation
+  ip?: IpProfile
+  actions: ResponseAction[]
+}
+
+export type Policy = 'AUTO' | 'APPROVAL' | 'OFF'
+
+export interface ResponsePolicy {
+  enabled: boolean
+  blockBruteForce: Policy
+  blockCompromise: Policy
+  killProcess: Policy
+  diskCleanup: Policy
+  restartService: Policy
+  bruteForceBlockHours: number
+  compromiseBlockHours: number
+  allowlist: string[]
+}
+
+export interface Kpis {
+  windowDays: number
+  mttdSeconds?: number
+  mttaSeconds?: number
+  mttrSeconds?: number
+  mttcSeconds?: number
+  incidentsOpened: number
+  incidentsResolved: number
+  falsePositives: number
+  falsePositiveRate: number
+  contained: number
+  containedAutomatically: number
+  autoContainmentRate: number
+  backlog: number
+  actionsAuto: number
+  actionsManual: number
+  actionsFailed: number
+  actionsAwaitingApproval: number
+  activeBlocks: number
+  droppedPackets: number
+  eventsPerMinute: number
+  maxDataLagSeconds: number
+  topRules: { ruleId: string; incidents: number; falsePositives: number }[]
+  topUsernames: { name: string; count: number }[]
+  daily: { day: string; opened: number; closed: number }[]
 }

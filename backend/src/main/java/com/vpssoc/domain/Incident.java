@@ -44,6 +44,9 @@ public class Incident {
     private Instant updatedAt;
     private Instant resolvedAt;
     private String resolutionNote;
+    private Instant acknowledgedAt;
+    private Instant containedAt;
+    private String containmentNote;
 
     protected Incident() {
     }
@@ -87,6 +90,19 @@ public class Incident {
             resolutionNote = note;
         }
         resolvedAt = newStatus.isActive() ? null : now;
+        if (newStatus == IncidentStatus.ACKNOWLEDGED && acknowledgedAt == null) {
+            acknowledgedAt = now;
+        }
+    }
+
+    /** Records that the threat was stopped (e.g. the attacker IP was blocked). Keeps the first time. */
+    public void contain(String note, Instant at) {
+        if (containedAt == null) {
+            containedAt = at;
+        }
+        containmentNote = containmentNote == null || containmentNote.contains(note) ? note
+                : containmentNote + "\n" + note;
+        updatedAt = at;
     }
 
     public Long getId() { return id; }
@@ -114,6 +130,9 @@ public class Incident {
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getResolvedAt() { return resolvedAt; }
     public String getResolutionNote() { return resolutionNote; }
+    public Instant getAcknowledgedAt() { return acknowledgedAt; }
+    public Instant getContainedAt() { return containedAt; }
+    public String getContainmentNote() { return containmentNote; }
 
     /** Titles can embed agent-reported paths; never let one overflow VARCHAR(255) and fail the batch. */
     private static String clamp(String s) {

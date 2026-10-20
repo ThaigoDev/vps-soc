@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -23,6 +24,15 @@ type Config struct {
 	FIMInterval       time.Duration
 	ProcScanInterval  time.Duration
 	AllowInsecureHTTP bool
+
+	// Active response
+	ResponseEnabled    bool          // run containment actions requested by the SOC
+	ResponseAllowlist  string        // extra IPs/CIDRs that are never blocked
+	ActionPollInterval time.Duration // how often to ask the SOC for queued actions
+	AutoBlock          bool          // local brute-force guard, works with the SOC offline
+	AutoBlockThreshold int
+	AutoBlockWindow    time.Duration
+	AutoBlockTTL       time.Duration
 }
 
 func Load() (Config, error) {
@@ -49,6 +59,27 @@ func Load() (Config, error) {
 		return c, err
 	}
 	c.AllowInsecureHTTP = os.Getenv("SOC_ALLOW_INSECURE_HTTP") == "true"
+
+	c.ResponseEnabled = os.Getenv("SOC_RESPONSE_ENABLED") != "false"
+	c.AutoBlock = c.ResponseEnabled && os.Getenv("SOC_AUTOBLOCK") != "false"
+	c.ResponseAllowlist = os.Getenv("SOC_RESPONSE_ALLOWLIST")
+	if c.ActionPollInterval, err = duration("SOC_ACTION_POLL_INTERVAL", 5*time.Second); err != nil {
+		return c, err
+	}
+	if c.AutoBlockWindow, err = duration("SOC_AUTOBLOCK_WINDOW", 2*time.Minute); err != nil {
+		return c, err
+	}
+	if c.AutoBlockTTL, err = duration("SOC_AUTOBLOCK_TTL", 24*time.Hour); err != nil {
+		return c, err
+	}
+	c.AutoBlockThreshold = 10
+	if v := os.Getenv("SOC_AUTOBLOCK_THRESHOLD"); v != "" {
+		n, convErr := strconv.Atoi(v)
+		if convErr != nil || n < 3 {
+			return c, fmt.Errorf("SOC_AUTOBLOCK_THRESHOLD must be an integer >= 3 (got %q)", v)
+		}
+		c.AutoBlockThreshold = n
+	}
 
 	switch c.LogSource {
 	case "auto", "journald", "file":

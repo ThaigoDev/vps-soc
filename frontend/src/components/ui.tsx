@@ -2,21 +2,23 @@ import type { ReactNode } from 'react'
 import { AlertOctagon, AlertTriangle, CircleDot, Info, ShieldAlert } from 'lucide-react'
 import type { IncidentStatus, Severity } from '../api'
 
-export function Card({ title, action, children, className = '' }: {
+export function Card({ title, action, children, className = '', fill = false }: {
   title?: ReactNode
   action?: ReactNode
   children: ReactNode
   className?: string
+  /** Stretch the body to the card height (e.g. a chart next to a taller panel). */
+  fill?: boolean
 }) {
   return (
-    <section className={`panel border border-line bg-surface ${className}`}>
+    <section className={`panel border border-line bg-surface ${fill ? 'flex flex-col' : ''} ${className}`}>
       {(title || action) && (
         <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
           <h2 className="hud-label flex items-center gap-2 font-semibold text-hud">{title}</h2>
           {action}
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className={fill ? 'flex min-h-0 flex-1 flex-col p-4' : 'p-4'}>{children}</div>
     </section>
   )
 }
@@ -141,4 +143,5 @@ export const eventTypeLabel: Record<string, string> = {
   FILE_DELETED: 'Arquivo removido',
   FILE_BASELINE: 'Baseline de arquivos',
   PROCESS_SUSPICIOUS: 'Processo suspeito',
+  RESPONSE_EXECUTED: 'Resposta automática',
 }
