@@ -25,6 +25,12 @@ import java.util.stream.Collectors;
 @Component
 public class IncidentExplainer {
 
+    private final com.vpssoc.vuln.VulnerabilityService vulns;
+
+    public IncidentExplainer(com.vpssoc.vuln.VulnerabilityService vulns) {
+        this.vulns = vulns;
+    }
+
     static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("dd/MM HH:mm:ss").withZone(ZONE);
     private static final DateTimeFormatter TIME_SHORT = DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(ZONE);
@@ -54,7 +60,10 @@ public class IncidentExplainer {
             case RuleIds.SECURITY_UPDATES -> updates(c, b);
             case RuleIds.REBOOT_REQUIRED -> reboot(c, b);
             case RuleIds.SSH_WEAK_CONFIG -> sshWeak(c, b);
-            case RuleIds.SERVICE_DOWN, RuleIds.SERVICE_CRASH_LOOP, RuleIds.SERVICE_HIGH_MEMORY -> pm2(c, s, b);
+            case RuleIds.SERVICE_DOWN, RuleIds.SERVICE_CRASH_LOOP, RuleIds.SERVICE_HIGH_MEMORY,
+                 RuleIds.SERVICE_NOT_RESPONDING, RuleIds.SERVICE_DEBUG_EXPOSED -> pm2(c, s, b);
+            case RuleIds.SERVICE_VULNERABLE -> vulnerable(c, b);
+            case RuleIds.CERT_EXPIRING -> certificate(c, b);
             default -> b.summary = Objects.toString(i.getDescription(), i.getTitle());
         }
         if (i.getService() != null && b.facts.stream().noneMatch(f -> f.label().equals("App PM2"))) {
@@ -454,6 +463,14 @@ public class IncidentExplainer {
                 b.summary = "O app %s está em crash loop: sobe, quebra e é reiniciado pelo PM2 em sequência (%s reinícios no total). Entre um crash e outro o `pm2 list` mostra online, o que esconde o problema.".formatted(name, restarts);
                 b.impact = "O app fica fora do ar a maior parte do tempo, requisições falham no meio, e cada reinício consome CPU. A causa costuma estar nas últimas linhas do log de erro: variável de ambiente faltando, porta já em uso, banco fora do ar ou exceção não tratada.";
             }
+            case RuleIds.SERVICE_NOT_RESPONDING -> {
+                b.summary = "O PM2 diz que %s está online, mas o app não responde na própria porta: o processo está vivo e travado (loop infinito, event loop bloqueado, pool de conexões esgotado) ou devolvendo erro 5xx.".formatted(name);
+                b.impact = "Para o usuário o site está fora do ar, mas nada reinicia sozinho, porque para o PM2 está tudo bem.";
+            }
+            case RuleIds.SERVICE_DEBUG_EXPOSED -> {
+                b.summary = "O app %s roda com o inspector do Node ligado (%s).".formatted(name, i.getTitle().replaceAll(".*\\((.*)\\)$", "$1"));
+                b.impact = "O inspector aceita comandos de quem conectar na porta (normalmente 9229) e executa qualquer código JavaScript dentro do app: ler o .env, o banco, abrir um shell. Se escuta em 0.0.0.0, qualquer um na internet pode fazer isso; em 127.0.0.1, qualquer processo ou usuário do servidor, ou uma falha de SSRF no próprio app.";
+            }
             default -> {
                 b.summary = "O app %s está usando %d MB de memória, uma fatia grande da RAM do servidor.".formatted(name, mem / (1024 * 1024));
                 b.impact = "Se a RAM acabar, o kernel mata processos (OOM killer), às vezes o banco de dados ou outro app. Memória que só cresce costuma ser vazamento (cache sem limite, listeners acumulando).";
@@ -478,7 +495,11 @@ public class IncidentExplainer {
         String asUser = svc != null && svc.get("user") != null && !"root".equals(svc.get("user")) ? "sudo -u " + svc.get("user") + " " : "";
         b.step("Ver o log de erro", "A causa quase sempre aparece nas últimas linhas.", asUser + "pm2 logs " + name + " --err --lines 50 --nostream");
         b.step("Ver detalhes do app", "Script, diretório, variáveis de ambiente, reinícios e uptime.", asUser + "pm2 describe " + name);
-        if (RuleIds.SERVICE_HIGH_MEMORY.equals(i.getRuleId())) {
+        if (RuleIds.SERVICE_DEBUG_EXPOSED.equals(i.getRuleId())) {
+            b.step("Ver quem escuta na porta do inspector", null, "sudo ss -tlnp | grep -E ':92[0-9]{2} '");
+            b.step("Desligar o inspector", "Tire --inspect de node_args no ecosystem.config.js (ou do comando pm2 start) e recrie o app.",
+                    asUser + "pm2 delete %s && %spm2 start ecosystem.config.js --only %s && %spm2 save".formatted(name, asUser, name, asUser));
+        } else if (RuleIds.SERVICE_HIGH_MEMORY.equals(i.getRuleId())) {
             b.step("Limitar a memória", "O PM2 reinicia o app ao passar do limite, antes de o servidor ficar sem RAM.",
                     asUser + "pm2 restart %s --max-memory-restart 500M && %spm2 save".formatted(name, asUser));
         } else {
@@ -488,6 +509,55 @@ public class IncidentExplainer {
         b.falsePositive = RuleIds.SERVICE_DOWN.equals(i.getRuleId()) && i.getSeverity() != Severity.HIGH
                 ? "Se você parou o app de propósito (pm2 stop), marque como falso positivo: o SOC não volta a alertar enquanto ele estiver parado."
                 : "Não é um ataque: é saúde da aplicação. Resolve sozinho quando o app volta ao normal.";
+    }
+
+    private void vulnerable(Context c, Builder b) {
+        Incident i = c.incident();
+        String name = i.getDedupKey();
+        List<com.vpssoc.vuln.Vulnerability> open = vulns.openFor(i.getHostId(), name).stream().filter(v -> !v.isDev()).toList();
+        long crit = open.stream().filter(v -> v.getSeverity() == com.vpssoc.vuln.Vulnerability.Level.CRITICAL).count();
+        long high = open.stream().filter(v -> v.getSeverity() == com.vpssoc.vuln.Vulnerability.Level.HIGH).count();
+        long fixable = open.stream().filter(v -> v.getFixedVersion() != null).count();
+        Map<String, Object> svc = serviceSnapshot(c.host(), name);
+        String dir = vulns.inventory(i.getHostId(), name).map(inv -> inv.getLockfile() == null ? null
+                : inv.getLockfile().replaceAll("/(node_modules/)?\\.?package-lock\\.json$|/npm-shrinkwrap\\.json$", "")).orElse(null);
+        b.summary = "%d pacote(s) npm usados em produção por %s têm falhas de segurança publicadas (%d crítica(s), %d alta(s)). %d delas já têm versão corrigida."
+                .formatted(open.size(), name, crit, high, fixable);
+        b.impact = "Robôs varrem a internet atrás de apps com bibliotecas vulneráveis conhecidas: uma falha de execução remota (RCE) ou de bypass de autenticação "
+                + "numa dependência é uma porta de entrada pronta. O risco é maior se o app for público, como mostram as portas e domínios.";
+        open.stream().limit(8).forEach(v -> b.fact(v.getSeverity() + " · " + v.getPkg() + "@" + v.getVersion(),
+                Objects.toString(v.getSummary(), v.getVulnId()) + (v.getFixedVersion() != null ? " → corrigido em " + v.getFixedVersion() : " → sem correção ainda")
+                        + " (" + (v.getAliases() != null && v.getAliases().stream().anyMatch(a -> a.startsWith("CVE-"))
+                        ? v.getAliases().stream().filter(a -> a.startsWith("CVE-")).findFirst().get() : v.getVulnId()) + ")"));
+        if (open.size() > 8) {
+            b.fact("E mais", (open.size() - 8) + " vulnerabilidade(s): veja a lista completa na página do app");
+        }
+        String cd = dir == null ? "" : "cd " + dir + " && ";
+        b.step("Ver o relatório do npm", "Mostra cada pacote, o caminho até ele e se a correção quebra a versão maior.", cd + "npm audit --omit=dev");
+        b.step("Corrigir o que não quebra compatibilidade", "Atualiza só dentro das faixas permitidas no package.json.", cd + "npm audit fix --omit=dev");
+        b.step("Publicar a correção", "Rode os testes, faça o deploy e reinicie o app. O agente reenvia a lista de pacotes e o SOC fecha o incidente sozinho.",
+                (svc != null && svc.get("user") != null && !"root".equals(svc.get("user")) ? "sudo -u " + svc.get("user") + " " : "") + "pm2 restart " + name);
+        b.step("Para as que exigem versão maior", "Atualize o pacote de topo indicado pelo npm audit (npm install <pacote>@latest) e teste antes de subir.", null);
+        b.falsePositive = "A base OSV lista a versão como afetada, mas a falha pode estar numa função que o seu código não usa. Mesmo assim, corrigir é o caminho mais barato. "
+                + "Dependências só de desenvolvimento (devDependencies) não contam para o incidente.";
+    }
+
+    private void certificate(Context c, Builder b) {
+        Incident i = c.incident();
+        String path = i.getDedupKey();
+        b.summary = Objects.toString(i.getDescription(), i.getTitle());
+        b.impact = "Com o certificado vencido o navegador mostra \"Sua conexão não é privada\" e bloqueia o site; apps e integrações que chamam a sua API "
+                + "começam a falhar. O certbot renova sozinho 30 dias antes, então chegar perto do vencimento quer dizer que a renovação automática está quebrada.";
+        b.fact("Arquivo", path);
+        Map<String, Object> p = c.host() == null ? null : c.host().getPosture();
+        if (p != null && p.get("failedUnits") instanceof List<?> f && f.stream().anyMatch(u -> String.valueOf(u).startsWith("certbot"))) {
+            b.fact("Causa provável", "o serviço certbot.service está em falha neste servidor");
+        }
+        b.step("Ver por que a renovação falha", null, "sudo systemctl status certbot.timer certbot.service --no-pager; sudo tail -50 /var/log/letsencrypt/letsencrypt.log");
+        b.step("Testar a renovação sem efeito", "Mostra o erro exato (porta 80 bloqueada, DNS apontando para outro IP, nginx com erro...).", "sudo certbot renew --dry-run");
+        b.step("Renovar de verdade e recarregar o nginx", null, "sudo certbot renew && sudo systemctl reload nginx");
+        b.step("Garantir a renovação automática", null, "sudo systemctl enable --now certbot.timer");
+        b.falsePositive = "Só se o certificado não estiver mais em uso (domínio desativado). Nesse caso apague-o: sudo certbot delete --cert-name <nome>.";
     }
 
     private static Map<String, Object> serviceSnapshot(Host host, String name) {

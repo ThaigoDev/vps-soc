@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Boxes } from 'lucide-react'
 import { api, type Host, type ServiceView } from '../api'
 import { Card, Empty, ErrorNote, SeverityBadge, timeAgo } from '../components/ui'
-import { HealthBadge, Pm2Status, fmtMb, fmtUptime, healthOrder } from '../components/ServiceUi'
+import { HealthBadge, Pm2Status, ScoreBadge, VulnCounts, fmtMb, fmtUptime, healthOrder } from '../components/ServiceUi'
 
 export function useServices() {
   return useQuery({ queryKey: ['services'], queryFn: () => api<ServiceView[]>('/services'), refetchInterval: 10_000 })
@@ -44,19 +44,21 @@ export default function Services() {
         )}
         {list.length > 0 && (
           <div className="-mx-4 overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
                 <tr className="hud-label text-left text-[10px] text-muted">
                   <th className="px-4 pb-2 font-normal">Saúde</th>
                   <th className="pb-2 font-normal">id · nome</th>
                   {multiHost && <th className="pb-2 font-normal">Host</th>}
                   <th className="pb-2 font-normal">Status</th>
+                  <th className="pb-2 font-normal">Segurança</th>
+                  <th className="pb-2 font-normal">Vulnerabilidades</th>
+                  <th className="pb-2 text-right font-normal">Resposta</th>
                   <th className="pb-2 text-right font-normal">Uptime</th>
                   <th className="pb-2 text-right font-normal">↺ total · 1h</th>
                   <th className="pb-2 text-right font-normal">CPU</th>
                   <th className="pb-2 text-right font-normal">Memória</th>
                   <th className="pb-2 pl-4 font-normal">Portas</th>
-                  <th className="pb-2 font-normal">Usuário · modo</th>
                   <th className="px-4 pb-2 font-normal">Incidentes</th>
                 </tr>
               </thead>
@@ -76,6 +78,12 @@ export default function Services() {
                       </td>
                       {multiHost && <td className="py-2 font-mono text-xs text-ink2">{s.hostId}</td>}
                       <td className="py-2"><Pm2Status status={a.status} /></td>
+                      <td className="py-2"><ScoreBadge score={s.securityScore} /></td>
+                      <td className="py-2"><VulnCounts counts={s.vulnerabilities} /></td>
+                      <td className="tnum py-2 text-right font-mono text-xs">
+                        {a.probe ? (a.probe.ok ? `${a.probe.latencyMs} ms` : <span className="font-bold text-critical">falha</span>) : '—'}
+                        {s.availability.uptimePct != null && <span className="block text-[10px] text-muted">{s.availability.uptimePct.toFixed(1)}% em 24h</span>}
+                      </td>
                       <td className="tnum py-2 text-right font-mono text-xs">{fmtUptime(a.startedAt, a.status)}</td>
                       <td className="tnum py-2 text-right font-mono text-xs">
                         {a.restarts}
@@ -87,7 +95,6 @@ export default function Services() {
                         <span className="block text-[10px] text-muted">{s.memoryPercent.toFixed(1)}% RAM</span>
                       </td>
                       <td className="py-2 pl-4 font-mono text-xs">{a.ports?.length ? a.ports.join(', ') : '—'}</td>
-                      <td className="py-2 text-xs text-ink2">{a.user ?? '?'} · {a.mode ?? 'fork'}</td>
                       <td className="px-4 py-2">
                         {worst ? (
                           <span className="flex items-center gap-1.5">
@@ -107,8 +114,8 @@ export default function Services() {
         )}
         {list.length > 0 && (
           <p className="mt-3 text-xs text-muted">
-            Atualizado pelo agente a cada 30 s · último relatório {timeAgo(list[0].reportedAt)}. A saúde considera o status, reinícios na última hora,
-            crash loop, memória acima de 40% da RAM, CPU acima de 90% e incidentes de segurança ligados ao app.
+            Atualizado pelo agente a cada 30 s · último relatório {timeAgo(list[0].reportedAt)}. A saúde considera status, resposta na porta, reinícios, crash loop, memória, CPU, erros no log e incidentes.
+            A nota de segurança soma dependências vulneráveis (OSV.dev), versão do Node, debugger, root, porta exposta, HTTPS, .env e NODE_ENV.
           </p>
         )}
       </Card>
@@ -143,6 +150,7 @@ export function ServicesPanel() {
             <HealthBadge health={s.health} />
             <span className="text-sm font-semibold">{s.pm2.name}</span>
             <span className="font-mono text-[11px] text-muted">{fmtUptime(s.pm2.startedAt, s.pm2.status)} · ↺{s.pm2.restarts} · {fmtMb(s.pm2.memoryBytes)}</span>
+            <ScoreBadge score={s.securityScore} />
             {s.activeIncidents.length > 0 && <SeverityBadge severity={s.activeIncidents[0].severity} />}
           </Link>
         ))}

@@ -30,6 +30,10 @@ export const ruleLabel: Record<string, string> = {
   SERVICE_DOWN: 'App PM2 caiu',
   SERVICE_CRASH_LOOP: 'App PM2 em crash loop',
   SERVICE_HIGH_MEMORY: 'App PM2 com memória alta',
+  SERVICE_VULNERABLE: 'Dependências vulneráveis',
+  SERVICE_DEBUG_EXPOSED: 'Debugger do Node aberto',
+  SERVICE_NOT_RESPONDING: 'App não responde',
+  CERT_EXPIRING: 'Certificado TLS vencendo',
 }
 
 export function useKpis(days: number) {

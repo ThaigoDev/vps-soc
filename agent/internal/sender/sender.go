@@ -152,6 +152,16 @@ func (s *Sender) SendHeartbeat(ctx context.Context, hb any) error {
 	return s.post(ctx, "/api/v1/ingest/heartbeat", hb)
 }
 
+// SendInventory uploads an app's installed packages (names and versions only).
+func (s *Sender) SendInventory(ctx context.Context, inv any) error {
+	if s.DryRun {
+		b, _ := json.Marshal(inv)
+		fmt.Printf("inventory: %.300s\n", b)
+		return nil
+	}
+	return s.post(ctx, "/api/v1/ingest/inventory", inv)
+}
+
 // PollActions asks the backend for response actions queued for this host.
 func (s *Sender) PollActions(ctx context.Context, out any) error {
 	if s.DryRun {

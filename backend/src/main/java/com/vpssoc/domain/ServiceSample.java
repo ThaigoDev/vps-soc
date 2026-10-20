@@ -21,6 +21,10 @@ public class ServiceSample {
     private Double cpuPercent;
     private Long memoryBytes;
     private Integer restarts;
+    private Boolean probeOk;
+    private Integer httpStatus;
+    private Integer latencyMs;
+    private Integer errorLines;
 
     protected ServiceSample() {
     }
@@ -37,6 +41,14 @@ public class ServiceSample {
         this.restarts = restarts;
     }
 
+    public ServiceSample withHealth(Boolean probeOk, Integer httpStatus, Integer latencyMs, Integer errorLines) {
+        this.probeOk = probeOk;
+        this.httpStatus = httpStatus;
+        this.latencyMs = latencyMs;
+        this.errorLines = errorLines;
+        return this;
+    }
+
     public String getHostId() { return hostId; }
     public String getName() { return name; }
     public Integer getPmId() { return pmId; }
@@ -45,4 +57,8 @@ public class ServiceSample {
     public Double getCpuPercent() { return cpuPercent; }
     public Long getMemoryBytes() { return memoryBytes; }
     public Integer getRestarts() { return restarts; }
+    public Boolean getProbeOk() { return probeOk; }
+    public Integer getHttpStatus() { return httpStatus; }
+    public Integer getLatencyMs() { return latencyMs; }
+    public Integer getErrorLines() { return errorLines; }
 }

@@ -39,6 +39,7 @@ type Posture struct {
 	FailedUnits     []string     `json:"failedUnits"` // null = unknown, [] = none failed
 	SSH             *SSHSettings `json:"ssh,omitempty"`
 	Firewall        any          `json:"firewall,omitempty"`
+	Certificates    []*CertInfo  `json:"certificates,omitempty"` // TLS certs of certbot and nginx
 }
 
 // PostureReader caches the slow checks (systemctl, sshd -T) for a few minutes.
@@ -47,6 +48,7 @@ type PostureReader struct {
 	slowAt time.Time
 	failed []string
 	ssh    *SSHSettings
+	certs  []*CertInfo
 }
 
 const slowPostureEvery = 5 * time.Minute
@@ -62,10 +64,12 @@ func (r *PostureReader) Read(ctx context.Context) Posture {
 	if time.Since(r.slowAt) > slowPostureEvery {
 		r.failed = failedUnits(ctx)
 		r.ssh = sshSettings(ctx)
+		r.certs = allCertificates()
 		r.slowAt = time.Now()
 	}
 	p.FailedUnits = r.failed // nil (sent as null) when systemctl could not be asked: the SOC then keeps its findings
 	p.SSH = r.ssh
+	p.Certificates = r.certs
 	return p
 }
 
@@ -246,4 +250,22 @@ func tcpEstablished() int {
 func processCount() int {
 	dirs, _ := filepath.Glob("/proc/[0-9]*")
 	return len(dirs)
+}
+
+// allCertificates merges certbot's certificates with any other cert nginx serves.
+func allCertificates() []*CertInfo {
+	seen := map[string]bool{}
+	var out []*CertInfo
+	for _, c := range ReadLetsEncryptCerts() {
+		seen[c.Path] = true
+		seen[filepath.Dir(c.Path)] = true // nginx points at fullchain.pem in the same live/ dir
+		out = append(out, c)
+	}
+	for _, s := range ReadNginxSites() {
+		if c := s.Certificate; c != nil && !seen[c.Path] && !seen[filepath.Dir(c.Path)] {
+			seen[c.Path] = true
+			out = append(out, c)
+		}
+	}
+	return out
 }

@@ -53,8 +53,13 @@ public class ServiceEvaluator {
         for (Map<String, Object> s : services) {
             String name = String.valueOf(s.get("name"));
             byName.computeIfAbsent(name, k -> new ArrayList<>()).add(s);
+            Map<?, ?> probe = s.get("probe") instanceof Map<?, ?> p ? p : null;
             samples.save(new ServiceSample(hostId, name, intOrNull(s.get("pmId")), now, String.valueOf(s.get("status")),
-                    dbl(s.get("cpuPercent")), lng(s.get("memoryBytes")), intOrNull(s.get("restarts"))));
+                    dbl(s.get("cpuPercent")), lng(s.get("memoryBytes")), intOrNull(s.get("restarts")))
+                    .withHealth(probe == null ? null : Boolean.TRUE.equals(probe.get("ok")),
+                            probe == null ? null : intOrNull(probe.get("status")),
+                            probe == null ? null : intOrNull(probe.get("latencyMs")),
+                            intOrNull(s.get("errorLines"))));
         }
 
         for (var entry : byName.entrySet()) {
@@ -77,6 +82,8 @@ public class ServiceEvaluator {
             }
 
             memory(hostId, name, inst, memTotalBytes);
+            debugger(hostId, name, inst);
+            responding(hostId, name, inst);
         }
 
         // Apps deleted from PM2 take their open incidents with them.
@@ -86,8 +93,10 @@ public class ServiceEvaluator {
         for (Incident inc : incidentRepo.findByHostIdAndRuleIdAndStatusIn(hostId, RuleIds.SERVICE_CRASH_LOOP, IncidentStatus.ACTIVE)) {
             closeIfGone(inc, byName.keySet());
         }
-        for (Incident inc : incidentRepo.findByHostIdAndRuleIdAndStatusIn(hostId, RuleIds.SERVICE_HIGH_MEMORY, IncidentStatus.ACTIVE)) {
-            closeIfGone(inc, byName.keySet());
+        for (String rule : List.of(RuleIds.SERVICE_HIGH_MEMORY, RuleIds.SERVICE_DEBUG_EXPOSED, RuleIds.SERVICE_NOT_RESPONDING)) {
+            for (Incident inc : incidentRepo.findByHostIdAndRuleIdAndStatusIn(hostId, rule, IncidentStatus.ACTIVE)) {
+                closeIfGone(inc, byName.keySet());
+            }
         }
     }
 
@@ -111,6 +120,58 @@ public class ServiceEvaluator {
             incidents.resolveActive(hostId, RuleIds.SERVICE_HIGH_MEMORY, name,
                     "Uso de memória voltou para %.1f%% da RAM".formatted(pct));
         }
+    }
+
+    /** Node's inspector lets whoever reaches the port run arbitrary code in the app. */
+    private void debugger(String hostId, String name, List<Map<String, Object>> inst) {
+        Optional<String> flag = inst.stream()
+                .map(s -> s.get("security") instanceof Map<?, ?> sec ? sec.get("inspect") : null)
+                .filter(f -> f != null && !f.toString().isBlank()).map(Object::toString).findFirst();
+        if (flag.isEmpty()) {
+            incidents.resolveActive(hostId, RuleIds.SERVICE_DEBUG_EXPOSED, name, "O app não roda mais com --inspect");
+            return;
+        }
+        boolean remote = flag.get().contains("0.0.0.0") || flag.get().matches(".*=\\d+\\.\\d+\\.\\d+\\.\\d+:.*") && !flag.get().contains("127.0.0.1");
+        incidents.apply(Detection.raise(hostId, RuleIds.SERVICE_DEBUG_EXPOSED, name)
+                .title("Debugger do Node aberto em " + name + " (" + flag.get() + ")")
+                .description("O app roda com %s. Quem alcançar a porta do inspector pode executar qualquer código dentro do app%s."
+                        .formatted(flag.get(), remote ? ", e ela escuta em todas as interfaces" : ""))
+                .severity(remote ? Severity.CRITICAL : Severity.HIGH)
+                .risk(remote ? 95 : 70)
+                .techniques(com.vpssoc.detection.Mitre.EXPLOIT_PUBLIC_APP, com.vpssoc.detection.Mitre.COMMAND_INTERPRETER)
+                .service(name)
+                .build(), null);
+    }
+
+    /** Online in PM2 but not answering on its port for two heartbeats in a row. */
+    private void responding(String hostId, String name, List<Map<String, Object>> inst) {
+        boolean online = inst.stream().allMatch(s -> "online".equals(s.get("status")));
+        List<Map<?, ?>> probes = new ArrayList<>();
+        for (Map<String, Object> s : inst) {
+            if (s.get("probe") instanceof Map<?, ?> p) {
+                probes.add(p);
+            }
+        }
+        if (!online || probes.isEmpty()) {
+            return;
+        }
+        if (probes.stream().anyMatch(p -> Boolean.TRUE.equals(p.get("ok")))) {
+            incidents.resolveActive(hostId, RuleIds.SERVICE_NOT_RESPONDING, name, "O app voltou a responder na porta");
+            return;
+        }
+        List<ServiceSample> last = samples.findTop2ByHostIdAndNameOrderByRecordedAtDesc(hostId, name);
+        if (last.size() < 2 || !last.stream().allMatch(x -> Boolean.FALSE.equals(x.getProbeOk()))) {
+            return; // a single failed check is not an outage
+        }
+        Map<?, ?> p = probes.getFirst();
+        incidents.apply(Detection.raise(hostId, RuleIds.SERVICE_NOT_RESPONDING, name)
+                .title("App PM2 não responde: " + name)
+                .description("O PM2 mostra %s online, mas a porta %s não responde (%s). O processo está vivo e travado ou quebrado."
+                        .formatted(name, p.get("port"), p.get("error") != null ? p.get("error") : "HTTP " + p.get("status")))
+                .severity(Severity.HIGH)
+                .risk(60)
+                .service(name)
+                .build(), null);
     }
 
     private void closeIfGone(Incident inc, Set<String> present) {

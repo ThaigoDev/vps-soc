@@ -24,6 +24,10 @@ public final class RuleIds {
     public static final String SERVICE_DOWN = "SERVICE_DOWN";
     public static final String SERVICE_CRASH_LOOP = "SERVICE_CRASH_LOOP";
     public static final String SERVICE_HIGH_MEMORY = "SERVICE_HIGH_MEMORY";
+    public static final String SERVICE_VULNERABLE = "SERVICE_VULNERABLE";
+    public static final String SERVICE_DEBUG_EXPOSED = "SERVICE_DEBUG_EXPOSED";
+    public static final String SERVICE_NOT_RESPONDING = "SERVICE_NOT_RESPONDING";
+    public static final String CERT_EXPIRING = "CERT_EXPIRING";
 
     private RuleIds() {
     }

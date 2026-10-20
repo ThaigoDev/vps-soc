@@ -50,6 +50,13 @@ type Service struct {
 	ErrLogPath       string    `json:"errLogPath,omitempty"`
 	OutLogPath       string    `json:"outLogPath,omitempty"`
 	Ports            []int     `json:"ports,omitempty"`
+
+	// Filled by the Enricher.
+	Listeners  []ListenAddr    `json:"listeners,omitempty"`
+	Sites      []Site          `json:"sites,omitempty"`
+	ErrorLines int             `json:"errorLines"` // lines appended to the error log since the last scan
+	Probe      *Probe          `json:"probe,omitempty"`
+	Security   ServiceSecurity `json:"security"`
 }
 
 func (s Service) key() string { return s.PM2Home + "#" + strconv.Itoa(s.PmID) }
@@ -78,6 +85,7 @@ type PM2Monitor struct {
 	Interval time.Duration
 	State    *state.Store
 	Emit     func(event.Event)
+	Enricher *Enricher // optional: listeners, probes, security facts, nginx sites
 
 	mu       sync.RWMutex
 	current  []Service
@@ -132,6 +140,9 @@ func (m *PM2Monitor) scan(ctx context.Context) {
 		services = append(services, list...)
 	}
 	st.Error = strings.Join(errs, "; ")
+	if m.Enricher != nil {
+		services = m.Enricher.Enrich(ctx, services)
+	}
 	sort.Slice(services, func(i, j int) bool {
 		if services[i].PM2Home != services[j].PM2Home {
 			return services[i].PM2Home < services[j].PM2Home
@@ -304,20 +315,26 @@ type jlistEntry struct {
 		CPU    float64 `json:"cpu"`
 	} `json:"monit"`
 	Env struct {
-		Status           string `json:"status"`
-		RestartTime      int    `json:"restart_time"`
-		UnstableRestarts int    `json:"unstable_restarts"`
-		PmUptime         int64  `json:"pm_uptime"`
-		CreatedAt        int64  `json:"created_at"`
-		ExecMode         string `json:"exec_mode"`
-		ExecPath         string `json:"pm_exec_path"`
-		Cwd              string `json:"pm_cwd"`
-		Version          string `json:"version"`
-		NodeVersion      string `json:"node_version"`
-		Username         string `json:"username"`
-		Namespace        string `json:"namespace"`
-		ErrLog           string `json:"pm_err_log_path"`
-		OutLog           string `json:"pm_out_log_path"`
+		Status           string          `json:"status"`
+		RestartTime      int             `json:"restart_time"`
+		UnstableRestarts int             `json:"unstable_restarts"`
+		PmUptime         int64           `json:"pm_uptime"`
+		CreatedAt        int64           `json:"created_at"`
+		ExecMode         string          `json:"exec_mode"`
+		ExecPath         string          `json:"pm_exec_path"`
+		Cwd              string          `json:"pm_cwd"`
+		Version          string          `json:"version"`
+		NodeVersion      string          `json:"node_version"`
+		Username         string          `json:"username"`
+		Namespace        string          `json:"namespace"`
+		ErrLog           string          `json:"pm_err_log_path"`
+		OutLog           string          `json:"pm_out_log_path"`
+		NodeArgs         json.RawMessage `json:"node_args"`
+		InterpreterArgs  json.RawMessage `json:"interpreter_args"`
+		NodeEnv          string          `json:"NODE_ENV"`
+		Env              struct {
+			NodeEnv string `json:"NODE_ENV"`
+		} `json:"env"`
 	} `json:"pm2_env"`
 }
 
@@ -343,6 +360,11 @@ func ParsePM2JList(out []byte, home string) ([]Service, error) {
 			Mode: strings.TrimSuffix(e.Env.ExecMode, "_mode"), ExecPath: e.Env.ExecPath, Cwd: e.Env.Cwd,
 			Version: e.Env.Version, NodeVersion: e.Env.NodeVersion, User: e.Env.Username, Namespace: e.Env.Namespace,
 			PM2Home: home, ErrLogPath: e.Env.ErrLog, OutLogPath: e.Env.OutLog,
+		}
+		s.Security.Inspect = InspectFlag(e.Env.NodeArgs, e.Env.InterpreterArgs)
+		s.Security.NodeEnv = e.Env.NodeEnv
+		if s.Security.NodeEnv == "" {
+			s.Security.NodeEnv = e.Env.Env.NodeEnv
 		}
 		if s.Version == "N/A" {
 			s.Version = ""

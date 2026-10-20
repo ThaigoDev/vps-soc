@@ -117,8 +117,10 @@ func main() {
 	procs := &collector.ProcessMonitor{Interval: cfg.ProcScanInterval, Emit: snd.Enqueue}
 	run(func() { procs.Run(ctx) })
 
-	pm2 := &collector.PM2Monitor{Interval: cfg.PM2Interval, State: store, Emit: snd.Enqueue}
+	pm2 := &collector.PM2Monitor{Interval: cfg.PM2Interval, State: store, Emit: snd.Enqueue,
+		Enricher: &collector.Enricher{Ports: func() []collector.Listener { return ports.Current() }}}
 	run(func() { pm2.Run(ctx) })
+	run(func() { uploadInventories(ctx, pm2, snd, store, cfg.HostID) })
 
 	run(func() {
 		metrics := &collector.MetricsReader{}
@@ -146,7 +148,7 @@ func main() {
 				"heartbeatIntervalSeconds": int(cfg.HeartbeatInterval.Seconds()),
 				"metrics":                  metrics.Read(),
 				"openPorts":                listeners,
-				"services":                 collector.AttachPorts(services, listeners),
+				"services":                 services,
 				"pm2":                      pm2Status,
 				"posture":                  p,
 				"response":                 map[string]any{"enabled": executor.Enabled, "autoBlock": guard.Enabled},
@@ -169,4 +171,56 @@ func errString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// uploadInventories sends each PM2 app's installed packages to the SOC when its lockfile
+// changes (and once a day, so new advisories are matched against fresh data).
+func uploadInventories(ctx context.Context, pm2 *collector.PM2Monitor, snd *sender.Sender, store *state.Store, hostID string) {
+	const stateFile = "inventory.json"
+	type sent struct {
+		Hash string    `json:"hash"`
+		At   time.Time `json:"at"`
+	}
+	last := map[string]sent{}
+	_, _ = store.LoadJSON(stateFile, &last)
+	timer := time.NewTimer(time.Minute) // let the first PM2 scan finish
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		services, _ := pm2.Current()
+		done := map[string]bool{}
+		for _, s := range services {
+			key := s.PM2Home + "#" + s.Name
+			if done[key] || s.Security.Lockfile == "" {
+				continue
+			}
+			done[key] = true
+			prev := last[key]
+			if prev.Hash == s.Security.DepsHash && time.Since(prev.At) < 24*time.Hour {
+				continue
+			}
+			inv, err := collector.ReadInventory(s.Security.Lockfile)
+			if err != nil {
+				log.Printf("inventory %s: %v", s.Name, err)
+				continue
+			}
+			body := map[string]any{"hostId": hostID, "service": s.Name, "pm2Home": s.PM2Home,
+				"lockfile": inv.Lockfile, "hash": inv.Hash, "packages": inv.Packages}
+			uctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			err = snd.SendInventory(uctx, body)
+			cancel()
+			if err != nil {
+				log.Printf("upload inventory %s: %v", s.Name, err)
+				continue
+			}
+			last[key] = sent{Hash: inv.Hash, At: time.Now()}
+			_ = store.SaveJSON(stateFile, last)
+			log.Printf("inventory %s: %d packages sent", s.Name, len(inv.Packages))
+		}
+		timer.Reset(10 * time.Minute)
+	}
 }

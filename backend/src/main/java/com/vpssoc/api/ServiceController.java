@@ -8,6 +8,7 @@ import com.vpssoc.service.ServiceDirectory;
 import com.vpssoc.service.ServiceHealthService;
 import com.vpssoc.service.ServiceHealthService.ServiceDetail;
 import com.vpssoc.service.ServiceHealthService.ServiceView;
+import com.vpssoc.vuln.VulnerabilityService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -22,8 +23,11 @@ public class ServiceController {
     private final ServiceHealthService health;
     private final ServiceDirectory directory;
     private final ResponseService response;
+    private final VulnerabilityService vulns;
 
-    public ServiceController(ServiceHealthService health, ServiceDirectory directory, ResponseService response) {
+    public ServiceController(ServiceHealthService health, ServiceDirectory directory, ResponseService response,
+                             VulnerabilityService vulns) {
+        this.vulns = vulns;
         this.health = health;
         this.directory = directory;
         this.response = response;
@@ -38,6 +42,12 @@ public class ServiceController {
     public ServiceDetail detail(@PathVariable String hostId, @PathVariable String name, @RequestParam(defaultValue = "24") int hours) {
         return health.detail(hostId, name, Math.clamp(hours, 1, 24 * 7))
                 .orElseThrow(() -> new IllegalArgumentException("app %s não encontrado em %s".formatted(name, hostId)));
+    }
+
+    /** Re-checks the app's dependencies against OSV.dev now (normally done on upload and daily). */
+    @PostMapping("/{hostId}/{name}/scan")
+    public VulnerabilityService.ScanResult scan(@PathVariable String hostId, @PathVariable String name) {
+        return vulns.scan(hostId, name);
     }
 
     /** Queues `pm2 restart <id>` for the agent (the agent re-checks the id still is that app). */

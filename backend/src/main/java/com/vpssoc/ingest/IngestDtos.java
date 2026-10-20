@@ -67,6 +67,11 @@ public final class IngestDtos {
     public record IngestResult(int accepted, int skipped) {
     }
 
+    public record InventoryUpload(@NotBlank @Pattern(regexp = HOST_ID_PATTERN) String hostId, @NotBlank String service,
+                                  String pm2Home, String lockfile, @NotBlank String hash,
+                                  @NotNull @Size(max = 10000) List<Map<String, Object>> packages) {
+    }
+
     public record ActionPoll(@NotBlank @Pattern(regexp = HOST_ID_PATTERN) String hostId) {
     }
 

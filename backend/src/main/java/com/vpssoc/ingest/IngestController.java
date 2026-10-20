@@ -3,6 +3,7 @@ package com.vpssoc.ingest;
 import com.vpssoc.domain.ResponseAction;
 import com.vpssoc.ingest.IngestDtos.*;
 import com.vpssoc.response.ResponseService;
+import com.vpssoc.vuln.VulnerabilityService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -15,8 +16,10 @@ public class IngestController {
 
     private final IngestService service;
     private final ResponseService response;
+    private final VulnerabilityService vulns;
 
-    public IngestController(IngestService service, ResponseService response) {
+    public IngestController(IngestService service, ResponseService response, VulnerabilityService vulns) {
+        this.vulns = vulns;
         this.service = service;
         this.response = response;
     }
@@ -30,6 +33,14 @@ public class IngestController {
     public ResponseEntity<Void> heartbeat(@Valid @RequestBody Heartbeat hb, HttpServletRequest req) {
         service.heartbeat(hb, req.getRemoteAddr());
         return ResponseEntity.noContent().build();
+    }
+
+    /** An app's installed packages (sent when its lockfile changes and once a day). */
+    @PostMapping("/inventory")
+    public ResponseEntity<Void> inventory(@Valid @RequestBody InventoryUpload u) {
+        vulns.ingest(u.hostId(), u.service(), u.pm2Home(), u.lockfile(), u.hash(), u.packages());
+        vulns.scanLater(u.hostId(), u.service());
+        return ResponseEntity.accepted().build();
     }
 
     /** The agent asks for approved containment actions every few seconds. */
