@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { Crosshair, Server, Terminal } from 'lucide-react'
 import { api, qs, type Host, type Incident, type Page, type SecurityEvent, type Severity, type SourceIpStats, type Summary, type TimelineBucket } from '../api'
 import { MitreMatrix } from '../components/MitreMatrix'
+import { ServicesPanel } from './Services'
 import { ApprovalBanner, CheckList, IncidentTrend, SocKpis, TopDetections, postureChecks } from '../components/SocMetrics'
 import { Card, Empty, ErrorNote, RiskBar, SeverityBadge, chartTooltip, eventTypeLabel, severityStyle, threatLevel, timeAgo } from '../components/ui'
 
@@ -58,6 +59,7 @@ export default function Overview() {
         <IncidentQueue incidents={active.data?.content} className="xl:col-span-2" />
         <TopIps />
       </div>
+      <ServicesPanel />
       <div className="grid gap-4 xl:grid-cols-3">
         <AssetHealth />
         <LiveFeed className="xl:col-span-2" />

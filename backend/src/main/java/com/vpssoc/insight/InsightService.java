@@ -42,6 +42,14 @@ public class InsightService {
     @Transactional(readOnly = true)
     public Insight insight(Incident inc) {
         List<SecurityEvent> evs = events.findByIncident(inc.getId());
+        if (inc.getRuleId().startsWith("SERVICE_") && !inc.getRuleId().equals("SERVICE_FAILED")) {
+            // Heartbeat-raised service incidents have no trigger event: show the app's own history.
+            Map<Long, SecurityEvent> merged = new TreeMap<>();
+            evs.forEach(e -> merged.put(e.getId(), e));
+            events.serviceEvents(inc.getHostId(), inc.getDedupKey(), inc.getFirstSeen().minus(java.time.Duration.ofMinutes(30)))
+                    .forEach(e -> merged.put(e.getId(), e));
+            evs = merged.values().stream().sorted(java.util.Comparator.comparing(SecurityEvent::getOccurredAt)).toList();
+        }
         IpProfile ip = inc.getSourceIp() == null ? null : ips.profile(inc.getHostId(), inc.getSourceIp());
         // Actions of this incident, plus blocks of its source IP started by a sibling incident
         // (e.g. the brute force that preceded a compromise).

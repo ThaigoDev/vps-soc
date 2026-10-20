@@ -144,4 +144,8 @@ export const eventTypeLabel: Record<string, string> = {
   FILE_BASELINE: 'Baseline de arquivos',
   PROCESS_SUSPICIOUS: 'Processo suspeito',
   RESPONSE_EXECUTED: 'Resposta automática',
+  SERVICE_STATUS_CHANGED: 'App PM2 mudou de status',
+  SERVICE_RESTARTED: 'App PM2 reiniciou',
+  SERVICE_ADDED: 'App PM2 adicionado',
+  SERVICE_REMOVED: 'App PM2 removido',
 }

@@ -20,9 +20,13 @@ public enum EventType {
     FILE_DELETED(Severity.MEDIUM, Category.FILE),
     FILE_BASELINE(Severity.INFO, Category.FILE),
     PROCESS_SUSPICIOUS(Severity.HIGH, Category.PROCESS),
-    RESPONSE_EXECUTED(Severity.INFO, Category.RESPONSE);
+    RESPONSE_EXECUTED(Severity.INFO, Category.RESPONSE),
+    SERVICE_STATUS_CHANGED(Severity.LOW, Category.SERVICE),
+    SERVICE_RESTARTED(Severity.LOW, Category.SERVICE),
+    SERVICE_ADDED(Severity.INFO, Category.SERVICE),
+    SERVICE_REMOVED(Severity.LOW, Category.SERVICE);
 
-    public enum Category { AUTH_FAILURE, AUTH_SUCCESS, PRIVILEGE, NETWORK, AGENT, FILE, PROCESS, RESPONSE }
+    public enum Category { AUTH_FAILURE, AUTH_SUCCESS, PRIVILEGE, NETWORK, AGENT, FILE, PROCESS, RESPONSE, SERVICE }
 
     public static final Set<EventType> SSH_FAILURES = EnumSet.of(SSH_FAILED_LOGIN, SSH_INVALID_USER);
     public static final Set<EventType> FILE_CHANGES = EnumSet.of(FILE_CREATED, FILE_MODIFIED, FILE_DELETED);

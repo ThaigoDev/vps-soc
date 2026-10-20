@@ -21,6 +21,9 @@ public final class RuleIds {
     public static final String SECURITY_UPDATES = "SECURITY_UPDATES";
     public static final String REBOOT_REQUIRED = "REBOOT_REQUIRED";
     public static final String SSH_WEAK_CONFIG = "SSH_WEAK_CONFIG";
+    public static final String SERVICE_DOWN = "SERVICE_DOWN";
+    public static final String SERVICE_CRASH_LOOP = "SERVICE_CRASH_LOOP";
+    public static final String SERVICE_HIGH_MEMORY = "SERVICE_HIGH_MEMORY";
 
     private RuleIds() {
     }

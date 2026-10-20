@@ -40,7 +40,9 @@ public final class IngestDtos {
             Metrics metrics,
             @Size(max = 2000) List<Map<String, Object>> openPorts,
             Map<String, Object> posture,
-            Map<String, Object> response) {
+            Map<String, Object> response,
+            @Size(max = 500) List<Map<String, Object>> services,
+            Map<String, Object> pm2) {
     }
 
     public record Metrics(

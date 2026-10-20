@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Ban, Check, CheckCircle2, Clock, Copy, Cpu, Eraser, Hourglass, RotateCcw, ShieldCheck, Unlock, X, XCircle } from 'lucide-react'
+import { Ban, Boxes, Check, CheckCircle2, Clock, Copy, Cpu, Eraser, Hourglass, RotateCcw, ShieldCheck, Unlock, X, XCircle } from 'lucide-react'
 import { api, type ActionStatus, type ActionType, type Policy, type ResponseAction } from '../api'
 import { ErrorNote, fmtTime, timeAgo } from './ui'
 
@@ -22,6 +22,7 @@ export const actionIcon: Record<ActionType, typeof Ban> = {
   KILL_PROCESS: Cpu,
   DISK_CLEANUP: Eraser,
   RESTART_SERVICE: RotateCcw,
+  PM2_RESTART: Boxes,
 }
 
 export const policyLabel: Record<Policy, string> = {

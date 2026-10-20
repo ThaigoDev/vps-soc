@@ -64,6 +64,10 @@ soc:
     kill-process: ${SOC_RESPONSE_KILL_PROCESS:APPROVAL}
     disk-cleanup: ${SOC_RESPONSE_DISK_CLEANUP:AUTO}
     restart-service: ${SOC_RESPONSE_RESTART_SERVICE:APPROVAL}
+    # Restart a PM2 app that crashed (status errored)
+    restart-pm2: ${SOC_RESPONSE_RESTART_PM2:APPROVAL}
+    # A PM2 app using more than this share of the host RAM opens SERVICE_HIGH_MEMORY
+    service-memory-percent: ${SOC_SERVICE_MEMORY_PERCENT:40}
     brute-force-block-ttl: ${SOC_RESPONSE_BRUTE_FORCE_TTL:PT24H}
     compromise-block-ttl: ${SOC_RESPONSE_COMPROMISE_TTL:P7D}
     # IPs/CIDRs never blocked (your home/office IP), on top of loopback/private/Tailscale/link-local

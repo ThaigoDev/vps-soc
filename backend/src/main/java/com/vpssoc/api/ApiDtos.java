@@ -43,13 +43,14 @@ public final class ApiDtos {
                                Severity severity, int riskScore, IncidentStatus status, String sourceIp,
                                String username, List<Technique> techniques, int eventCount, Instant firstSeen,
                                Instant lastSeen, Instant createdAt, Instant updatedAt, Instant resolvedAt,
-                               String resolutionNote, Instant acknowledgedAt, Instant containedAt, String containmentNote) {
+                               String resolutionNote, Instant acknowledgedAt, Instant containedAt, String containmentNote,
+                               String service) {
         public static IncidentView of(Incident i) {
             return new IncidentView(i.getId(), i.getHostId(), i.getRuleId(), i.getTitle(), i.getDescription(),
                     i.getSeverity(), i.getRiskScore(), i.getStatus(), i.getSourceIp(), i.getUsername(),
                     i.getTechniques().stream().map(Technique::of).toList(), i.getEventCount(), i.getFirstSeen(),
                     i.getLastSeen(), i.getCreatedAt(), i.getUpdatedAt(), i.getResolvedAt(), i.getResolutionNote(),
-                    i.getAcknowledgedAt(), i.getContainedAt(), i.getContainmentNote());
+                    i.getAcknowledgedAt(), i.getContainedAt(), i.getContainmentNote(), i.getService());
         }
     }
 
@@ -85,11 +86,13 @@ public final class ApiDtos {
     public record HostView(String id, String hostname, String os, String agentVersion, String lastIp,
                            HostStatus status, Instant firstSeen, Instant lastSeen, int heartbeatIntervalSeconds,
                            Map<String, Object> metrics, List<Map<String, Object>> openPorts,
-                           Map<String, Object> posture, Map<String, Object> response) {
+                           Map<String, Object> posture, Map<String, Object> response,
+                           Map<String, Object> pm2, int services) {
         public static HostView of(Host h) {
             return new HostView(h.getId(), h.getHostname(), h.getOs(), h.getAgentVersion(), h.getLastIp(),
                     h.getStatus(), h.getFirstSeen(), h.getLastSeen(), h.getHeartbeatIntervalSeconds(),
-                    h.getMetrics(), h.getOpenPorts(), h.getPosture(), h.getResponse());
+                    h.getMetrics(), h.getOpenPorts(), h.getPosture(), h.getResponse(),
+                    h.getPm2(), h.getServices() == null ? 0 : h.getServices().size());
         }
     }
 

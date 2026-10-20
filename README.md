@@ -42,6 +42,9 @@ apagar o histórico, e o próprio silêncio do agente vira um incidente (`AGENT_
 | `SECURITY_UPDATES` | atualizações de segurança pendentes (update-notifier do Ubuntu) | Baixo / Médio (≥10) | T1190 |
 | `REBOOT_REQUIRED` | `/var/run/reboot-required` existe | Baixo | - |
 | `SSH_WEAK_CONFIG` | `sshd -T` mostra `PasswordAuthentication yes` ou `PermitRootLogin yes` | Médio | T1110 |
+| `SERVICE_DOWN` | app PM2 com status `errored` (Alto) ou `stopped` (Médio); resolve sozinho quando volta online | Alto / Médio | - |
+| `SERVICE_CRASH_LOOP` | app PM2 reiniciou ≥3 vezes em 10 min (por instância; o `pm2 list` mostra online entre os crashes) | Alto | - |
+| `SERVICE_HIGH_MEMORY` | app PM2 usando ≥40% da RAM do servidor | Médio | - |
 
 Os quatro últimos são **postura** (não são ataques): resolvem sozinhos quando a condição some, e
 marcar um deles como falso positivo vale como “risco aceito” (não reabre enquanto nada mudar).
@@ -105,6 +108,25 @@ Políticas no `.env` do SOC (`AUTO`, `APPROVAL` ou `OFF`): `SOC_RESPONSE_BLOCK_B
 `SOC_RESPONSE_BLOCK_COMPROMISE`, `SOC_RESPONSE_KILL_PROCESS`, `SOC_RESPONSE_DISK_CLEANUP`,
 `SOC_RESPONSE_RESTART_SERVICE`; `SOC_RESPONSE_ENABLED=false` desliga tudo. No agente:
 `SOC_RESPONSE_ENABLED`, `SOC_AUTOBLOCK*`, `SOC_RESPONSE_ALLOWLIST` (veja `agent/deploy/agent.env.example`).
+
+## Serviços (PM2)
+
+A página **Serviços** mostra o mesmo que o `pm2 list` (id, nome, status, uptime, reinícios, CPU,
+memória, usuário, modo) e acrescenta, para cada app:
+
+- **saúde**: Saudável, Degradado ou Fora do ar, com os motivos (status, reinícios na última hora, crash
+  loop, memória, CPU, incidente de segurança ligado ao app);
+- **portas** em que o processo escuta;
+- **incidentes** do app: os de saúde e também portas novas ou web shells cujo processo é do app;
+- **histórico**: gráficos de CPU e memória, mudanças de status e reinícios, com as últimas linhas do
+  log de erro capturadas no momento de cada queda;
+- botão **Reiniciar** (`pm2 restart`, executado pelo agente). Um app que cai (`errored`) gera uma
+  proposta de reinício na página Resposta (`SOC_RESPONSE_RESTART_PM2`, padrão: com aprovação).
+
+O agente acha os daemons PM2 já rodando (`PM2 vX: God Daemon (<PM2_HOME>)`) e roda `pm2 jlist`
+como o dono de cada um, a cada `SOC_PM2_INTERVAL` (30 s). Ele nunca inicia um daemon e não escreve
+nada no `PM2_HOME`. Do `jlist` só são lidos os campos operacionais: as variáveis de ambiente dos apps
+(senhas, chaves de API) nunca saem da VPS.
 
 ## Métricas
 

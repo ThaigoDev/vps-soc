@@ -6,6 +6,7 @@ import com.vpssoc.detection.Mitre;
 import com.vpssoc.domain.EventType;
 import com.vpssoc.domain.SecurityEvent;
 import com.vpssoc.domain.Severity;
+import com.vpssoc.service.ServiceDirectory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -23,6 +24,12 @@ import java.util.Set;
  */
 @Component
 public class SuspiciousProcessRule implements DetectionRule {
+
+    private final ServiceDirectory services;
+
+    public SuspiciousProcessRule(ServiceDirectory services) {
+        this.services = services;
+    }
 
     private static final List<String> TEMP_DIRS = List.of("/tmp/", "/var/tmp/", "/dev/shm/");
 
@@ -86,7 +93,9 @@ public class SuspiciousProcessRule implements DetectionRule {
             }
         }
         return List.of(
-                raise.techniques(techniques).username(e.getUsername()).build(),
+                raise.techniques(techniques).username(e.getUsername())
+                        // a web shell's parent is the app that was exploited
+                        .service(services.nameForPid(host, e.meta("pid"), e.meta("ppid")).orElse(null)).build(),
                 Detection.attachIfActive(host, RuleIds.SSH_COMPROMISE, null)
                         .techniques(techniques)
                         .risk(100)

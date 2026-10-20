@@ -24,7 +24,8 @@ public record Detection(
         List<String> techniques,
         String sourceIp,
         String username,
-        Supplier<List<Long>> relatedEventIds) {
+        Supplier<List<Long>> relatedEventIds,
+        String service) {
 
     public enum Mode { RAISE, ATTACH_IF_ACTIVE }
 
@@ -56,6 +57,7 @@ public record Detection(
         private String sourceIp;
         private String username;
         private Supplier<List<Long>> related = List::of;
+        private String service;
 
         private Builder(Mode mode, String hostId, String ruleId, String dedupKey) {
             this.mode = mode;
@@ -73,10 +75,12 @@ public record Detection(
         public Builder username(String v) { username = v; return this; }
         /** Earlier events to link as evidence when the incident is first created. */
         public Builder related(Supplier<List<Long>> v) { related = v; return this; }
+        /** The PM2 app this incident is about (its own failure, or a port/process it owns). */
+        public Builder service(String v) { service = v; return this; }
 
         public Detection build() {
             return new Detection(mode, hostId, ruleId, dedupKey, title, description, severity, riskScore,
-                    techniques, sourceIp, username, related);
+                    techniques, sourceIp, username, related, service);
         }
     }
 }

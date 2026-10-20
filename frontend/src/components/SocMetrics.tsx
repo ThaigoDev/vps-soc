@@ -7,7 +7,7 @@ import { api, type Host, type Kpis } from '../api'
 import { Card, Empty, ErrorNote, chartTooltip } from './ui'
 import { fmtDuration } from './ResponseUi'
 
-const ruleLabel: Record<string, string> = {
+export const ruleLabel: Record<string, string> = {
   SSH_BRUTE_FORCE: 'Brute force SSH',
   SSH_LOGIN_AFTER_BRUTE_FORCE: 'Login após brute force',
   SSH_ROOT_LOGIN: 'Login root',
@@ -27,6 +27,9 @@ const ruleLabel: Record<string, string> = {
   SECURITY_UPDATES: 'Patches pendentes',
   REBOOT_REQUIRED: 'Reboot pendente',
   SSH_WEAK_CONFIG: 'SSH fraco',
+  SERVICE_DOWN: 'App PM2 caiu',
+  SERVICE_CRASH_LOOP: 'App PM2 em crash loop',
+  SERVICE_HIGH_MEMORY: 'App PM2 com memória alta',
 }
 
 export function useKpis(days: number) {

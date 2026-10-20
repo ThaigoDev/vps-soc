@@ -54,7 +54,11 @@ public class IncidentExplainer {
             case RuleIds.SECURITY_UPDATES -> updates(c, b);
             case RuleIds.REBOOT_REQUIRED -> reboot(c, b);
             case RuleIds.SSH_WEAK_CONFIG -> sshWeak(c, b);
+            case RuleIds.SERVICE_DOWN, RuleIds.SERVICE_CRASH_LOOP, RuleIds.SERVICE_HIGH_MEMORY -> pm2(c, s, b);
             default -> b.summary = Objects.toString(i.getDescription(), i.getTitle());
+        }
+        if (i.getService() != null && b.facts.stream().noneMatch(f -> f.label().equals("App PM2"))) {
+            b.facts.add(0, new Fact("App PM2", i.getService()));
         }
         commonRisk(c, s, b);
         b.response = describeResponse(c);
@@ -425,6 +429,74 @@ public class IncidentExplainer {
                 + "Se você precisa mesmo de senha, marque como falso positivo (risco aceito).";
     }
 
+    // ---------------------------------------------------------------- PM2 apps
+
+    private void pm2(Context c, Stats s, Builder b) {
+        Incident i = c.incident();
+        String name = i.getDedupKey();
+        Map<String, Object> svc = serviceSnapshot(c.host(), name);
+        Object status = svc == null ? "?" : svc.get("status");
+        Object restarts = svc == null ? "?" : svc.get("restarts");
+        long mem = svc != null && svc.get("memoryBytes") instanceof Number n ? n.longValue() : 0;
+        SecurityEvent last = s.latest(EventType.SERVICE_RESTARTED, EventType.SERVICE_STATUS_CHANGED);
+        List<String> errTail = last == null ? List.of() : strings(last.meta("errLogTail"));
+        long restartEvents = s.count(EventType.SERVICE_RESTARTED);
+
+        switch (i.getRuleId()) {
+            case RuleIds.SERVICE_DOWN -> {
+                boolean crashed = i.getSeverity() == Severity.HIGH;
+                b.summary = crashed
+                        ? "O app %s está com status errored no PM2: ele terminou com erro tantas vezes que o PM2 parou de tentar reiniciar. Está fora do ar.".formatted(name)
+                        : "O app %s está parado (stopped) no PM2. Isso acontece com `pm2 stop`, ou quando o app sai sem erro e não está configurado para reiniciar.".formatted(name);
+                b.impact = "Tudo que esse app atende (site, API, worker, fila) está indisponível para os usuários enquanto ele não voltar.";
+            }
+            case RuleIds.SERVICE_CRASH_LOOP -> {
+                b.summary = "O app %s está em crash loop: sobe, quebra e é reiniciado pelo PM2 em sequência (%s reinícios no total). Entre um crash e outro o `pm2 list` mostra online, o que esconde o problema.".formatted(name, restarts);
+                b.impact = "O app fica fora do ar a maior parte do tempo, requisições falham no meio, e cada reinício consome CPU. A causa costuma estar nas últimas linhas do log de erro: variável de ambiente faltando, porta já em uso, banco fora do ar ou exceção não tratada.";
+            }
+            default -> {
+                b.summary = "O app %s está usando %d MB de memória, uma fatia grande da RAM do servidor.".formatted(name, mem / (1024 * 1024));
+                b.impact = "Se a RAM acabar, o kernel mata processos (OOM killer), às vezes o banco de dados ou outro app. Memória que só cresce costuma ser vazamento (cache sem limite, listeners acumulando).";
+            }
+        }
+        b.fact("Status atual", String.valueOf(status));
+        b.fact("Reinícios (total)", String.valueOf(restarts));
+        if (restartEvents > 0) {
+            b.fact("Eventos de reinício vistos", String.valueOf(restartEvents));
+        }
+        if (svc != null) {
+            b.fact("Memória", (mem / (1024 * 1024)) + " MB");
+            b.fact("Script", String.valueOf(svc.get("execPath")));
+            b.fact("Usuário / PM2_HOME", svc.get("user") + " · " + svc.get("pm2Home"));
+            if (svc.get("ports") instanceof List<?> ports && !ports.isEmpty()) {
+                b.fact("Portas", ports.stream().map(String::valueOf).reduce((x, y) -> x + ", " + y).orElse(""));
+            }
+        }
+        if (!errTail.isEmpty()) {
+            b.fact("Últimas linhas do log de erro", String.join("\n", errTail));
+        }
+        String asUser = svc != null && svc.get("user") != null && !"root".equals(svc.get("user")) ? "sudo -u " + svc.get("user") + " " : "";
+        b.step("Ver o log de erro", "A causa quase sempre aparece nas últimas linhas.", asUser + "pm2 logs " + name + " --err --lines 50 --nostream");
+        b.step("Ver detalhes do app", "Script, diretório, variáveis de ambiente, reinícios e uptime.", asUser + "pm2 describe " + name);
+        if (RuleIds.SERVICE_HIGH_MEMORY.equals(i.getRuleId())) {
+            b.step("Limitar a memória", "O PM2 reinicia o app ao passar do limite, antes de o servidor ficar sem RAM.",
+                    asUser + "pm2 restart %s --max-memory-restart 500M && %spm2 save".formatted(name, asUser));
+        } else {
+            b.step("Reiniciar depois de corrigir a causa", "Em crash loop, reiniciar sem corrigir só repete o erro.", asUser + "pm2 restart " + name);
+            b.step("Salvar a lista do PM2", "Garante que o app volta depois de um reboot.", asUser + "pm2 save");
+        }
+        b.falsePositive = RuleIds.SERVICE_DOWN.equals(i.getRuleId()) && i.getSeverity() != Severity.HIGH
+                ? "Se você parou o app de propósito (pm2 stop), marque como falso positivo: o SOC não volta a alertar enquanto ele estiver parado."
+                : "Não é um ataque: é saúde da aplicação. Resolve sozinho quando o app volta ao normal.";
+    }
+
+    private static Map<String, Object> serviceSnapshot(Host host, String name) {
+        if (host == null || host.getServices() == null) {
+            return null;
+        }
+        return host.getServices().stream().filter(x -> name.equals(x.get("name"))).findFirst().orElse(null);
+    }
+
     // ---------------------------------------------------------------- shared pieces
 
     private void sshHardeningSteps(Host host, Builder b) {
@@ -519,6 +591,7 @@ public class IncidentExplainer {
             case KILL_PROCESS -> "Encerrar processo " + a.getParams().getOrDefault("exe", a.getTarget());
             case DISK_CLEANUP -> "Limpar disco (journald + cache do apt)";
             case RESTART_SERVICE -> "Reiniciar " + a.getTarget();
+            case PM2_RESTART -> "Reiniciar app PM2 " + a.getParams().getOrDefault("name", a.getTarget());
         };
     }
 

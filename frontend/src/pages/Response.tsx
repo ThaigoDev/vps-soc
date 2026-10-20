@@ -53,13 +53,14 @@ function PolicyCard() {
     { label: 'Bloquear invasor (login após brute force)', policy: p.blockCompromise, detail: `${p.compromiseBlockHours / 24} dias · derruba as sessões` },
     { label: 'Encerrar processo malicioso', policy: p.killProcess, detail: 'guarda cópia do binário como evidência' },
     { label: 'Limpar disco cheio', policy: p.diskCleanup, detail: 'journald > 500 MB + cache do apt' },
-    { label: 'Reiniciar serviço em falha', policy: p.restartService, detail: 'só se ainda estiver em falha' },
+    { label: 'Reiniciar serviço em falha', policy: p.restartService, detail: 'systemd; só se ainda estiver em falha' },
+    { label: 'Reiniciar app PM2 que caiu', policy: p.restartPm2, detail: 'pm2 restart quando o app fica errored' },
   ]
   const color = (v: Policy) => (v === 'AUTO' ? 'var(--good)' : v === 'APPROVAL' ? 'var(--warning)' : 'var(--muted)')
   return (
     <Card title={<><Bot size={13} aria-hidden /> Playbooks · o que o SOC faz sozinho</>}
       action={<span className={`hud-label text-[10px] font-bold ${p.enabled ? 'text-good' : 'text-critical'}`}>{p.enabled ? 'Resposta ativa ligada' : 'Resposta ativa desligada'}</span>}>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
         {rows.map((r) => (
           <div key={r.label} className="border border-line bg-page p-3">
             <p className="text-sm font-semibold">{r.label}</p>

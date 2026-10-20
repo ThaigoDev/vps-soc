@@ -23,6 +23,7 @@ type Config struct {
 	PortScanInterval  time.Duration
 	FIMInterval       time.Duration
 	ProcScanInterval  time.Duration
+	PM2Interval       time.Duration
 	AllowInsecureHTTP bool
 
 	// Active response
@@ -56,6 +57,9 @@ func Load() (Config, error) {
 		return c, err
 	}
 	if c.ProcScanInterval, err = duration("SOC_PROCESS_SCAN_INTERVAL", 15*time.Second); err != nil {
+		return c, err
+	}
+	if c.PM2Interval, err = duration("SOC_PM2_INTERVAL", 30*time.Second); err != nil {
 		return c, err
 	}
 	c.AllowInsecureHTTP = os.Getenv("SOC_ALLOW_INSECURE_HTTP") == "true"

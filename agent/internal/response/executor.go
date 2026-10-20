@@ -27,6 +27,7 @@ const (
 	KillProcess    = "KILL_PROCESS"
 	DiskCleanup    = "DISK_CLEANUP"
 	RestartService = "RESTART_SERVICE"
+	RestartPM2     = "PM2_RESTART"
 )
 
 // Result statuses reported back to the SOC.
@@ -79,6 +80,8 @@ func (x *Executor) Execute(ctx context.Context, a Action) Result {
 		return x.diskCleanup(ctx)
 	case RestartService:
 		return x.restartService(ctx, a)
+	case RestartPM2:
+		return x.restartPM2(ctx, a)
 	default:
 		return Result{Status: StatusRejected, Output: "ação desconhecida: " + a.Type}
 	}
@@ -284,4 +287,56 @@ func firstLine(s string) string {
 func lastLine(s string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
 	return strings.TrimSpace(lines[len(lines)-1])
+}
+
+// restartPM2 restarts one PM2 app by id, through the daemon that already runs it and as
+// that daemon's user. The id must still belong to an app with the requested name.
+func (x *Executor) restartPM2(ctx context.Context, a Action) Result {
+	home, name := str(a.Params["pm2Home"]), str(a.Params["name"])
+	id := int(num(a.Params["pmId"]))
+	var daemon *collector.PM2Daemon
+	for _, d := range collector.FindPM2Daemons() {
+		if d.Home == home {
+			d := d
+			daemon = &d
+			break
+		}
+	}
+	if daemon == nil {
+		return Result{Status: StatusRejected, Output: "nenhum daemon PM2 rodando com PM2_HOME " + home}
+	}
+	list, err := collector.ListPM2(ctx, *daemon)
+	if err != nil {
+		return Result{Status: StatusFailed, Output: "pm2 jlist: " + err.Error()}
+	}
+	if !pm2Has(list, id, name) {
+		return Result{Status: StatusRejected, Output: fmt.Sprintf("o id %d do PM2 não é mais o app %q; nada feito", id, name)}
+	}
+	if _, err := collector.PM2Command(ctx, *daemon, "restart", fmt.Sprint(id)); err != nil {
+		return Result{Status: StatusFailed, Output: "pm2 restart: " + err.Error()}
+	}
+	time.Sleep(3 * time.Second)
+	after, err := collector.ListPM2(ctx, *daemon)
+	if err != nil {
+		return Result{Status: StatusFailed, Output: "pm2 jlist após restart: " + err.Error()}
+	}
+	for _, s := range after {
+		if s.PmID == id {
+			if s.Status != "online" {
+				return Result{Status: StatusFailed, Output: fmt.Sprintf("%s reiniciado mas está %s; veja pm2 logs %s", name, s.Status, name)}
+			}
+			return Result{Status: StatusSucceeded, Output: fmt.Sprintf("%s (pm2 id %d) reiniciado e online, pid %d", name, id, s.PID),
+				Details: map[string]any{"name": name, "pmId": id, "pid": s.PID}}
+		}
+	}
+	return Result{Status: StatusFailed, Output: name + " sumiu da lista do PM2 após o restart"}
+}
+
+func pm2Has(list []collector.Service, id int, name string) bool {
+	for _, s := range list {
+		if s.PmID == id && s.Name == name {
+			return true
+		}
+	}
+	return false
 }

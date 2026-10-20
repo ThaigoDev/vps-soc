@@ -117,6 +117,9 @@ func main() {
 	procs := &collector.ProcessMonitor{Interval: cfg.ProcScanInterval, Emit: snd.Enqueue}
 	run(func() { procs.Run(ctx) })
 
+	pm2 := &collector.PM2Monitor{Interval: cfg.PM2Interval, State: store, Emit: snd.Enqueue}
+	run(func() { pm2.Run(ctx) })
+
 	run(func() {
 		metrics := &collector.MetricsReader{}
 		metrics.Read() // prime CPU and network counters
@@ -135,12 +138,16 @@ func main() {
 			case <-ticker.C:
 			}
 			p := posture.Read(ctx)
+			listeners := ports.Current()
+			services, pm2Status := pm2.Current()
 			p.Firewall = fw.Stats(ctx)
 			hb := map[string]any{
 				"hostId": cfg.HostID, "hostname": hostname, "os": osName, "agentVersion": version,
 				"heartbeatIntervalSeconds": int(cfg.HeartbeatInterval.Seconds()),
 				"metrics":                  metrics.Read(),
-				"openPorts":                ports.Current(),
+				"openPorts":                listeners,
+				"services":                 collector.AttachPorts(services, listeners),
+				"pm2":                      pm2Status,
 				"posture":                  p,
 				"response":                 map[string]any{"enabled": executor.Enabled, "autoBlock": guard.Enabled},
 			}

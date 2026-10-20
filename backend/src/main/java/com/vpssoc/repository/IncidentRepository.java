@@ -25,6 +25,10 @@ public interface IncidentRepository extends JpaRepository<Incident, Long>, JpaSp
 
     long countBySourceIp(String sourceIp);
 
+    List<Incident> findByHostIdAndServiceOrderByLastSeenDesc(String hostId, String service);
+
+    List<Incident> findByServiceIsNotNullAndStatusIn(Collection<IncidentStatus> statuses);
+
     Optional<Incident> findFirstByHostIdAndRuleIdAndDedupKeyOrderByIdDesc(String hostId, String ruleId, String dedupKey);
 
     /** SOC timing KPIs over incidents created since :since (seconds). */

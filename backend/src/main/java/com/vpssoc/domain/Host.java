@@ -40,6 +40,12 @@ public class Host {
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> response;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    private List<Map<String, Object>> services;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, Object> pm2;
+
     protected Host() {
     }
 
@@ -73,4 +79,8 @@ public class Host {
     public void setPosture(Map<String, Object> posture) { this.posture = posture; }
     public Map<String, Object> getResponse() { return response; }
     public void setResponse(Map<String, Object> response) { this.response = response; }
+    public List<Map<String, Object>> getServices() { return services; }
+    public void setServices(List<Map<String, Object>> services) { this.services = services; }
+    public Map<String, Object> getPm2() { return pm2; }
+    public void setPm2(Map<String, Object> pm2) { this.pm2 = pm2; }
 }

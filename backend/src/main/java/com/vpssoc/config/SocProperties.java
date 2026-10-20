@@ -46,8 +46,10 @@ public record SocProperties(
             Policy killProcess,
             Policy diskCleanup,
             Policy restartService,
+            Policy restartPm2,
             Duration bruteForceBlockTtl,
             Duration compromiseBlockTtl,
+            double serviceMemoryPercent,
             List<String> allowlist) {
 
         public Policy effective(Policy p) {

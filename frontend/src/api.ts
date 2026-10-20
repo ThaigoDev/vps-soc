@@ -1,6 +1,6 @@
 export type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type IncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'FALSE_POSITIVE'
-export type EventCategory = 'AUTH_FAILURE' | 'AUTH_SUCCESS' | 'PRIVILEGE' | 'NETWORK' | 'AGENT' | 'FILE' | 'PROCESS' | 'RESPONSE'
+export type EventCategory = 'AUTH_FAILURE' | 'AUTH_SUCCESS' | 'PRIVILEGE' | 'NETWORK' | 'AGENT' | 'FILE' | 'PROCESS' | 'RESPONSE' | 'SERVICE'
 
 export interface Page<T> {
   content: T[]
@@ -37,6 +37,7 @@ export interface Incident {
   acknowledgedAt?: string
   containedAt?: string
   containmentNote?: string
+  service?: string
 }
 
 export interface SecurityEvent {
@@ -119,6 +120,8 @@ export interface Host {
   openPorts?: OpenPort[]
   posture?: Posture
   response?: { enabled?: boolean; autoBlock?: boolean }
+  pm2?: { daemons?: string[]; error?: string }
+  services?: number
 }
 
 export interface Posture {
@@ -226,7 +229,7 @@ export interface IpProfile {
 }
 
 export type ActionStatus = 'PROPOSED' | 'PENDING' | 'SENT' | 'SUCCEEDED' | 'FAILED' | 'REJECTED' | 'DISMISSED' | 'EXPIRED'
-export type ActionType = 'BLOCK_IP' | 'UNBLOCK_IP' | 'KILL_PROCESS' | 'DISK_CLEANUP' | 'RESTART_SERVICE'
+export type ActionType = 'BLOCK_IP' | 'UNBLOCK_IP' | 'KILL_PROCESS' | 'DISK_CLEANUP' | 'RESTART_SERVICE' | 'PM2_RESTART'
 
 export interface ResponseAction {
   id: number
@@ -275,6 +278,7 @@ export interface ResponsePolicy {
   killProcess: Policy
   diskCleanup: Policy
   restartService: Policy
+  restartPm2: Policy
   bruteForceBlockHours: number
   compromiseBlockHours: number
   allowlist: string[]
@@ -305,4 +309,62 @@ export interface Kpis {
   topRules: { ruleId: string; incidents: number; falsePositives: number }[]
   topUsernames: { name: string; count: number }[]
   daily: { day: string; opened: number; closed: number }[]
+}
+
+// ---- PM2 services ------------------------------------------------------------------------
+
+export interface Pm2App {
+  source: 'pm2'
+  name: string
+  namespace?: string
+  pmId: number
+  pid: number
+  status: 'online' | 'stopping' | 'stopped' | 'launching' | 'errored' | 'one-launch-status' | string
+  restarts: number
+  unstableRestarts: number
+  startedAt?: string
+  createdAt?: string
+  cpuPercent: number
+  memoryBytes: number
+  mode?: string
+  execPath?: string
+  cwd?: string
+  version?: string
+  nodeVersion?: string
+  user?: string
+  pm2Home: string
+  errLogPath?: string
+  outLogPath?: string
+  ports?: number[]
+}
+
+export type ServiceHealth = 'HEALTHY' | 'DEGRADED' | 'DOWN' | 'UNKNOWN'
+
+export interface IncidentRef {
+  id: number
+  ruleId: string
+  title: string
+  severity: Severity
+  status: IncidentStatus
+  lastSeen: string
+}
+
+export interface ServiceView {
+  hostId: string
+  hostOnline: boolean
+  reportedAt: string
+  pm2: Pm2App
+  health: ServiceHealth
+  reasons: string[]
+  restartsLastHour: number
+  memoryPercent: number
+  activeIncidents: IncidentRef[]
+  incidents30d: number
+}
+
+export interface ServiceDetail {
+  service: ServiceView
+  samples: { t: string; status: string; cpu?: number; memoryMb?: number; restarts?: number }[]
+  events: SecurityEvent[]
+  incidents: IncidentRef[]
 }

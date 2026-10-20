@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, Ban, BookOpen, ExternalLink, Fingerprint, Globe, ListChecks, ShieldCheck, Target, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Ban, Boxes, BookOpen, ExternalLink, Fingerprint, Globe, ListChecks, ShieldCheck, Target, Zap } from 'lucide-react'
 import { api, type Incident, type IncidentDetailData, type IncidentStatus, type IpProfile, type ResponseAction } from '../api'
 import { Card, Empty, ErrorNote, RiskBar, SeverityBadge, StatusBadge, eventTypeLabel, fmtTime, timeAgo } from '../components/ui'
 import { ActionCard, CommandBlock } from '../components/ResponseUi'
@@ -49,6 +49,12 @@ export default function IncidentDetail() {
             </span>
           )}
           <span className="hud-label text-[10px] text-muted">#{i.id} · {i.ruleId}</span>
+          {i.service && (
+            <Link to={`/services/${encodeURIComponent(i.hostId)}/${encodeURIComponent(i.service)}`}
+              className="inline-flex items-center gap-1 rounded-sm border border-hud px-1.5 py-0.5 font-mono text-[11px] text-ink hover:bg-raised">
+              <Boxes size={12} className="text-hud" aria-hidden /> app PM2: {i.service}
+            </Link>
+          )}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{i.title}</h1>
         {ex.summary && <p className="mt-2 max-w-4xl text-[15px] leading-relaxed text-ink">{ex.summary}</p>}

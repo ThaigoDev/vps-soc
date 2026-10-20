@@ -235,7 +235,7 @@ public class ResponseService {
                     "Processo encerrado pelo agente em %s. %s".formatted(LOCAL_TIME.format(now), Objects.toString(a.getResult(), "")), now));
             case DISK_CLEANUP -> incident(a).ifPresent(inc -> inc.contain(
                     "Limpeza automática de disco: " + a.getResult(), now));
-            case RESTART_SERVICE -> incident(a).ifPresent(inc -> inc.contain(
+            case RESTART_SERVICE, PM2_RESTART -> incident(a).ifPresent(inc -> inc.contain(
                     "Serviço reiniciado: " + a.getResult(), now));
         }
     }

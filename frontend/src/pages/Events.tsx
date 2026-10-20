@@ -13,6 +13,7 @@ const categories: { value: EventCategory | ''; label: string }[] = [
   { value: 'FILE', label: 'Arquivos' },
   { value: 'PROCESS', label: 'Processos' },
   { value: 'RESPONSE', label: 'Resposta automática' },
+  { value: 'SERVICE', label: 'Apps PM2' },
   { value: 'AGENT', label: 'Agente' },
 ]
 

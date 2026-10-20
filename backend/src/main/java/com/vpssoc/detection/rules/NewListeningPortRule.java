@@ -6,6 +6,7 @@ import com.vpssoc.detection.Mitre;
 import com.vpssoc.domain.EventType;
 import com.vpssoc.domain.SecurityEvent;
 import com.vpssoc.domain.Severity;
+import com.vpssoc.service.ServiceDirectory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,6 +19,12 @@ import java.util.Set;
  */
 @Component
 public class NewListeningPortRule implements DetectionRule {
+
+    private final ServiceDirectory services;
+
+    public NewListeningPortRule(ServiceDirectory services) {
+        this.services = services;
+    }
 
     private static final List<String> SUSPICIOUS_DIRS = List.of("/tmp/", "/var/tmp/", "/dev/shm/", "/run/user/");
 
@@ -45,7 +52,8 @@ public class NewListeningPortRule implements DetectionRule {
                         suspicious ? " O executável roda de um diretório temporário ou foi apagado do disco." : ""))
                 .severity(severity)
                 .risk(risk)
-                .username(e.getUsername());
+                .username(e.getUsername())
+                .service(services.nameForPid(e.getHostId(), e.meta("pid")).orElse(null));
         if (suspicious) {
             raise.techniques(Mitre.NON_STANDARD_PORT, Mitre.COMMAND_INTERPRETER);
         } else {
