@@ -26,14 +26,14 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <form onSubmit={submit} className="panel w-full max-w-sm border border-line bg-surface p-6">
-        <div className="mb-1 flex items-center gap-2 font-mono text-lg font-bold tracking-widest">
-          <Shield className="text-hud" aria-hidden />
-          VPS-SOC
-        </div>
-        <p className="hud-label mb-5 text-[10px] text-muted">Centro de operações de segurança · acesso restrito</p>
-        <label htmlFor="token" className="hud-label mb-1 block text-muted">
-          Credencial de acesso
+      <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-line bg-surface p-7 shadow-xl">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-raised">
+          <Shield size={24} className="text-hud" aria-hidden />
+        </span>
+        <h1 className="mt-4 text-xl font-semibold tracking-tight">Entrar no VPS-SOC</h1>
+        <p className="mt-1 text-sm text-ink2">Monitor de segurança dos seus servidores.</p>
+        <label htmlFor="token" className="mb-1.5 mt-6 block text-sm font-medium">
+          Token de acesso
         </label>
         <input
           id="token"
@@ -41,16 +41,17 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           autoComplete="current-password"
           value={token}
           onChange={(e) => setValue(e.target.value)}
-          className="w-full rounded-sm border border-line bg-page px-3 py-2 font-mono text-sm outline-none focus:border-hud"
-          placeholder="SOC_DASHBOARD_TOKEN"
+          className="w-full rounded-lg border border-line bg-page px-3 py-2 font-mono text-sm outline-none focus:border-[var(--hud)]"
+          placeholder="Cole aqui o token"
           autoFocus
         />
-        {error && <p className="mt-2 text-sm text-critical">{error}</p>}
+        <p className="mt-1.5 text-xs text-muted">É o valor de SOC_DASHBOARD_TOKEN no arquivo .env do servidor do SOC.</p>
+        {error && <p className="mt-3 text-sm text-critical">{error}</p>}
         <button
           disabled={busy || !token.trim()}
-          className="hud-label mt-4 w-full rounded-sm border border-hud bg-raised px-3 py-2 font-semibold text-ink hover:bg-line disabled:opacity-50"
+          className="mt-5 w-full rounded-lg bg-[var(--primary)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
         >
-          {busy ? "Verificando…" : "Autenticar"}
+          {busy ? 'Verificando…' : 'Entrar'}
         </button>
       </form>
     </div>

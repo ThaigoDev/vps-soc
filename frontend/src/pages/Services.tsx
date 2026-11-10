@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Boxes } from 'lucide-react'
 import { api, type Host, type ServiceView } from '../api'
-import { Card, Empty, ErrorNote, SeverityBadge, timeAgo } from '../components/ui'
-import { HealthBadge, Pm2Status, ScoreBadge, VulnCounts, fmtMb, fmtUptime, healthOrder } from '../components/ServiceUi'
+import { Card, Empty, ErrorNote, PageHeader, SeverityBadge, timeAgo } from '../components/ui'
+import { HealthBadge, ScoreBadge, VulnCounts, fmtMb, fmtUptime, healthOrder } from '../components/ServiceUi'
 
 export function useServices() {
   return useQuery({ queryKey: ['services'], queryFn: () => api<ServiceView[]>('/services'), refetchInterval: 10_000 })
@@ -21,45 +21,44 @@ export default function Services() {
   const pm2Problems = (hosts.data ?? []).filter((h) => h.pm2?.error || (h.pm2 && (h.pm2.daemons?.length ?? 0) === 0))
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <PageHeader icon={Boxes} title="Aplicações"
+        description="Os sites e APIs Node.js que rodam na VPS pelo PM2. Mostra se cada um está no ar, se responde rápido, se está reiniciando sem parar, e se tem dependências com falhas de segurança conhecidas." />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Tile label="Apps no PM2" value={list.length} />
+        <Tile label="Aplicações" value={list.length} />
         <Tile label="Saudáveis" value={count('HEALTHY')} tone="var(--good)" />
-        <Tile label="Degradados" value={count('DEGRADED')} tone={count('DEGRADED') ? 'var(--warning)' : undefined} />
+        <Tile label="Instáveis" value={count('DEGRADED')} tone={count('DEGRADED') ? 'var(--warning)' : undefined} />
         <Tile label="Fora do ar" value={count('DOWN')} tone={count('DOWN') ? 'var(--critical)' : undefined} />
-        <Tile label="Reinícios · 1h" value={list.reduce((n, s) => n + s.restartsLastHour, 0)} />
+        <Tile label="Reinícios na última hora" value={list.reduce((n, s) => n + s.restartsLastHour, 0)} />
       </div>
 
       {pm2Problems.map((h) => (
-        <p key={h.id} className="border border-warning bg-surface px-4 py-2 text-sm">
+        <p key={h.id} className="rounded-xl border border-warning bg-surface px-4 py-3 text-sm">
           <span className="font-semibold">{h.id}:</span>{' '}
           {h.pm2?.error ? `não foi possível ler o PM2 (${h.pm2.error})` : 'nenhum daemon PM2 rodando'}
         </p>
       ))}
 
-      <Card title={<><Boxes size={13} aria-hidden /> Apps PM2 · pm2 list</>}>
-        {q.error && <ErrorNote error={q.error} />}
+      <Card flush title="Lista de aplicações" description="Problemas primeiro. Clique em uma aplicação para ver detalhes, gráficos e vulnerabilidades.">
+        {q.error && <div className="px-4"><ErrorNote error={q.error} /></div>}
         {q.data && list.length === 0 && (
-          <Empty>Nenhum app PM2 reportado. O agente precisa ser a versão 0.5.0 ou mais nova, e o PM2 precisa estar rodando na VPS.</Empty>
+          <Empty>Nenhuma aplicação PM2 encontrada. O agente precisa ser a versão 0.5.0 ou mais nova e o PM2 precisa estar rodando na VPS.</Empty>
         )}
         {list.length > 0 && (
-          <div className="-mx-4 overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[960px] text-sm">
               <thead>
-                <tr className="hud-label text-left text-[10px] text-muted">
-                  <th className="px-4 pb-2 font-normal">Saúde</th>
-                  <th className="pb-2 font-normal">id · nome</th>
-                  {multiHost && <th className="pb-2 font-normal">Host</th>}
-                  <th className="pb-2 font-normal">Status</th>
-                  <th className="pb-2 font-normal">Segurança</th>
-                  <th className="pb-2 font-normal">Vulnerabilidades</th>
-                  <th className="pb-2 text-right font-normal">Resposta</th>
-                  <th className="pb-2 text-right font-normal">Uptime</th>
-                  <th className="pb-2 text-right font-normal">↺ total · 1h</th>
-                  <th className="pb-2 text-right font-normal">CPU</th>
-                  <th className="pb-2 text-right font-normal">Memória</th>
-                  <th className="pb-2 pl-4 font-normal">Portas</th>
-                  <th className="px-4 pb-2 font-normal">Incidentes</th>
+                <tr className="border-b border-line text-left text-xs text-muted">
+                  <th className="px-4 py-2.5 font-medium">Saúde</th>
+                  <th className="py-2.5 font-medium">Aplicação</th>
+                  {multiHost && <th className="py-2.5 font-medium">Servidor</th>}
+                  <th className="py-2.5 font-medium" title="Nota de 0 a 100 dos itens de segurança da aplicação">Segurança</th>
+                  <th className="py-2.5 font-medium" title="Dependências npm com falhas conhecidas">Vulnerabilidades</th>
+                  <th className="py-2.5 text-right font-medium" title="Quanto tempo a aplicação levou para responder na última checagem">Responde em</th>
+                  <th className="py-2.5 text-right font-medium">No ar há</th>
+                  <th className="py-2.5 text-right font-medium" title="Total · na última hora">Reinícios</th>
+                  <th className="py-2.5 text-right font-medium">Memória</th>
+                  <th className="px-4 py-2.5 font-medium">Incidentes</th>
                 </tr>
               </thead>
               <tbody>
@@ -68,41 +67,36 @@ export default function Services() {
                   const worst = s.activeIncidents[0]
                   return (
                     <tr key={`${s.hostId}-${a.pm2Home}-${a.pmId}`} onClick={() => navigate(`/services/${encodeURIComponent(s.hostId)}/${encodeURIComponent(a.name)}`)}
-                      className="cursor-pointer border-t border-line hover:bg-raised" title={s.reasons.join(' · ')}>
-                      <td className="px-4 py-2"><HealthBadge health={s.health} /></td>
-                      <td className="py-2">
-                        <Link to={`/services/${encodeURIComponent(s.hostId)}/${encodeURIComponent(a.name)}`} className="font-semibold hover:text-hud" onClick={(e) => e.stopPropagation()}>
-                          <span className="font-mono text-xs text-muted">{a.pmId}</span> {a.name}
+                      className="cursor-pointer border-t border-line first:border-t-0 hover:bg-raised" title={s.reasons.join(' · ')}>
+                      <td className="px-4 py-3"><HealthBadge health={s.health} /></td>
+                      <td className="max-w-xs py-3">
+                        <Link to={`/services/${encodeURIComponent(s.hostId)}/${encodeURIComponent(a.name)}`} className="font-medium hover:text-hud" onClick={(e) => e.stopPropagation()}>
+                          {a.name}
                         </Link>
-                        {s.health !== 'HEALTHY' && <span className="block text-xs text-ink2">{s.reasons[0]}</span>}
+                        <span className="block truncate text-xs text-muted">
+                          {s.health !== 'HEALTHY' ? s.reasons[0] : <>PM2: {a.status}{a.ports?.length ? ` · porta ${a.ports.join(', ')}` : ''}</>}
+                        </span>
                       </td>
-                      {multiHost && <td className="py-2 font-mono text-xs text-ink2">{s.hostId}</td>}
-                      <td className="py-2"><Pm2Status status={a.status} /></td>
-                      <td className="py-2"><ScoreBadge score={s.securityScore} /></td>
-                      <td className="py-2"><VulnCounts counts={s.vulnerabilities} /></td>
-                      <td className="tnum py-2 text-right font-mono text-xs">
-                        {a.probe ? (a.probe.ok ? `${a.probe.latencyMs} ms` : <span className="font-bold text-critical">falha</span>) : '—'}
-                        {s.availability.uptimePct != null && <span className="block text-[10px] text-muted">{s.availability.uptimePct.toFixed(1)}% em 24h</span>}
+                      {multiHost && <td className="py-3 text-xs text-ink2">{s.hostId}</td>}
+                      <td className="py-3"><ScoreBadge score={s.securityScore} /></td>
+                      <td className="py-3"><VulnCounts counts={s.vulnerabilities} /></td>
+                      <td className="tnum py-3 text-right text-xs">
+                        {a.probe ? (a.probe.ok ? `${a.probe.latencyMs} ms` : <span className="font-semibold text-critical">não respondeu</span>) : <span className="text-muted">—</span>}
                       </td>
-                      <td className="tnum py-2 text-right font-mono text-xs">{fmtUptime(a.startedAt, a.status)}</td>
-                      <td className="tnum py-2 text-right font-mono text-xs">
+                      <td className="tnum py-3 text-right text-xs">{fmtUptime(a.startedAt, a.status)}</td>
+                      <td className="tnum py-3 text-right text-xs">
                         {a.restarts}
-                        <span className={s.restartsLastHour > 0 ? 'font-bold text-warning' : 'text-muted'}> · {s.restartsLastHour}</span>
+                        <span className={s.restartsLastHour > 0 ? 'font-semibold text-warning' : 'text-muted'}> · {s.restartsLastHour}</span>
                       </td>
-                      <td className="tnum py-2 text-right font-mono text-xs">{a.cpuPercent.toFixed(1)}%</td>
-                      <td className="tnum py-2 text-right font-mono text-xs">
-                        {fmtMb(a.memoryBytes)}
-                        <span className="block text-[10px] text-muted">{s.memoryPercent.toFixed(1)}% RAM</span>
-                      </td>
-                      <td className="py-2 pl-4 font-mono text-xs">{a.ports?.length ? a.ports.join(', ') : '—'}</td>
-                      <td className="px-4 py-2">
+                      <td className="tnum py-3 text-right text-xs">{fmtMb(a.memoryBytes)}</td>
+                      <td className="px-4 py-3">
                         {worst ? (
                           <span className="flex items-center gap-1.5">
                             <SeverityBadge severity={worst.severity} />
                             <span className="text-xs text-ink2">{s.activeIncidents.length > 1 ? `+${s.activeIncidents.length - 1}` : ''}</span>
                           </span>
                         ) : (
-                          <span className="text-xs text-muted">{s.incidents30d ? `${s.incidents30d} em 30d` : 'nenhum'}</span>
+                          <span className="text-xs text-muted">{s.incidents30d ? `${s.incidents30d} em 30 dias` : 'nenhum'}</span>
                         )}
                       </td>
                     </tr>
@@ -113,9 +107,9 @@ export default function Services() {
           </div>
         )}
         {list.length > 0 && (
-          <p className="mt-3 text-xs text-muted">
-            Atualizado pelo agente a cada 30 s · último relatório {timeAgo(list[0].reportedAt)}. A saúde considera status, resposta na porta, reinícios, crash loop, memória, CPU, erros no log e incidentes.
-            A nota de segurança soma dependências vulneráveis (OSV.dev), versão do Node, debugger, root, porta exposta, HTTPS, .env e NODE_ENV.
+          <p className="border-t border-line px-4 py-3 text-xs text-muted">
+            Atualizado pelo agente a cada 30 s (último: {timeAgo(list[0].reportedAt)}). A <b>saúde</b> olha se o app está no ar, responde, reinicia demais ou usa memória demais.
+            A <b>segurança</b> olha dependências com falhas conhecidas, versão do Node, se roda como root, HTTPS e arquivo .env.
           </p>
         )}
       </Card>
@@ -125,36 +119,9 @@ export default function Services() {
 
 function Tile({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
-    <div className="panel border border-line bg-surface p-3" style={tone ? { borderColor: tone } : undefined}>
-      <p className="hud-label text-[10px] text-muted">{label}</p>
-      <p className="tnum mt-1 font-mono text-3xl font-bold" style={tone ? { color: tone } : undefined}>{value}</p>
+    <div className="rounded-xl border border-line bg-surface p-4">
+      <p className="text-sm text-ink2">{label}</p>
+      <p className="tnum mt-1 text-3xl font-semibold" style={tone ? { color: tone } : undefined}>{value}</p>
     </div>
-  )
-}
-
-/** Compact strip for the overview: every app as a chip, problems first. */
-export function ServicesPanel() {
-  const q = useServices()
-  const list = [...(q.data ?? [])].sort((a, b) => healthOrder[a.health] - healthOrder[b.health] || a.pm2.pmId - b.pm2.pmId)
-  if (q.data && list.length === 0) return null
-  const bad = list.filter((s) => s.health === 'DOWN' || s.health === 'DEGRADED').length
-  return (
-    <Card title={<><Boxes size={13} aria-hidden /> Serviços (PM2)</>}
-      action={<Link to="/services" className="hud-label text-[10px] text-hud hover:underline">{bad ? `${bad} com problema · ` : ''}Detalhes</Link>}>
-      {q.error && <ErrorNote error={q.error} />}
-      <div className="flex flex-wrap gap-2">
-        {list.map((s) => (
-          <Link key={`${s.hostId}-${s.pm2.pm2Home}-${s.pm2.pmId}`} to={`/services/${encodeURIComponent(s.hostId)}/${encodeURIComponent(s.pm2.name)}`}
-            title={s.reasons.join(' · ')}
-            className="flex items-center gap-2 border border-line bg-page px-2.5 py-1.5 hover:border-hud">
-            <HealthBadge health={s.health} />
-            <span className="text-sm font-semibold">{s.pm2.name}</span>
-            <span className="font-mono text-[11px] text-muted">{fmtUptime(s.pm2.startedAt, s.pm2.status)} · ↺{s.pm2.restarts} · {fmtMb(s.pm2.memoryBytes)}</span>
-            <ScoreBadge score={s.securityScore} />
-            {s.activeIncidents.length > 0 && <SeverityBadge severity={s.activeIncidents[0].severity} />}
-          </Link>
-        ))}
-      </div>
-    </Card>
   )
 }

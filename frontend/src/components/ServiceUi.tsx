@@ -13,8 +13,8 @@ export const healthStyle: Record<ServiceHealth, { label: string; color: string; 
 export function HealthBadge({ health }: { health: ServiceHealth }) {
   const h = healthStyle[health]
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-ink"
-      style={{ borderColor: h.color, background: `color-mix(in srgb, ${h.color} 14%, transparent)` }}>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium text-ink"
+      style={{ borderColor: `color-mix(in srgb, ${h.color} 55%, transparent)`, background: `color-mix(in srgb, ${h.color} 14%, transparent)` }}>
       <h.Icon size={12} style={{ color: h.color }} aria-hidden />
       {h.label}
     </span>
@@ -60,16 +60,16 @@ export function ScoreBadge({ score, size = 'sm' }: { score: number; size?: 'sm' 
   if (size === 'lg') {
     return (
       <div className="flex items-baseline gap-2">
-        <span className="tnum font-mono text-5xl font-bold" style={{ color }}>{score}</span>
+        <span className="tnum text-5xl font-semibold" style={{ color }}>{score}</span>
         <span className="text-sm text-muted">/ 100</span>
-        <span className="hud-label ml-1 text-[11px] font-bold" style={{ color }}>{label}</span>
+        <span className="ml-1 text-sm font-semibold" style={{ color }}>{label}</span>
       </div>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-xs" title={`Nota de segurança ${score}/100 (${label})`}>
-      <span className="tnum font-bold" style={{ color }}>{score}</span>
-      <span className="text-[10px] text-muted">{label}</span>
+    <span className="inline-flex items-center gap-1.5 text-xs" title={`Nota de segurança ${score}/100 (${label})`}>
+      <span className="tnum font-semibold" style={{ color }}>{score}</span>
+      <span className="text-muted">{label}</span>
     </span>
   )
 }
@@ -85,8 +85,8 @@ export const vulnStyle: Record<VulnLevel, { label: string; color: string; short:
 export function VulnBadge({ level }: { level: VulnLevel }) {
   const v = vulnStyle[level]
   return (
-    <span className="inline-flex whitespace-nowrap rounded-sm border px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase text-ink"
-      style={{ borderColor: v.color, background: `color-mix(in srgb, ${v.color} 14%, transparent)` }}>
+    <span className="inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium text-ink"
+      style={{ borderColor: `color-mix(in srgb, ${v.color} 55%, transparent)`, background: `color-mix(in srgb, ${v.color} 14%, transparent)` }}>
       {v.label}
     </span>
   )
@@ -99,9 +99,9 @@ export function VulnCounts({ counts }: { counts?: Partial<Record<VulnLevel, numb
   if (!counts) return <span className="text-xs text-muted">—</span>
   if (shown.length === 0) return <span className="text-xs text-good">nenhuma</span>
   return (
-    <span className="flex flex-wrap gap-1 font-mono text-[11px]">
+    <span className="flex flex-wrap gap-1 text-xs">
       {shown.map((l) => (
-        <span key={l} className="rounded-sm border px-1" style={{ borderColor: vulnStyle[l].color }} title={`${counts[l]} ${vulnStyle[l].label.toLowerCase()}(s)`}>
+        <span key={l} className="rounded-full border px-1.5" style={{ borderColor: vulnStyle[l].color }} title={`${counts[l]} ${vulnStyle[l].label.toLowerCase()}(s)`}>
           {counts[l]} {vulnStyle[l].label.toLowerCase()}
         </span>
       ))}

@@ -41,7 +41,7 @@ export default function ServiceDetail() {
   return (
     <div className="space-y-4">
       <Link to="/services" className="hud-label inline-flex items-center gap-1 text-[11px] text-ink2 hover:text-hud">
-        <ArrowLeft size={13} aria-hidden /> Serviços
+        <ArrowLeft size={13} aria-hidden /> Aplicações
       </Link>
 
       <Card>
@@ -50,7 +50,7 @@ export default function ServiceDetail() {
           <Pm2Status status={a.status} />
           <span className="hud-label text-[10px] text-muted">pm2 id {a.pmId} · {s.hostId}</span>
           <button onClick={() => { if (window.confirm(`Reiniciar ${a.name} com pm2 restart?`)) restart.mutate() }} disabled={restart.isPending || !s.hostOnline}
-            className="hud-label ml-auto flex items-center gap-1 rounded-sm border border-line px-2.5 py-1 text-[11px] text-ink hover:bg-raised disabled:opacity-50">
+            className="hud-label ml-auto flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:bg-raised disabled:opacity-50">
             <RotateCcw size={13} aria-hidden /> Reiniciar (pm2 restart)
           </button>
         </div>
@@ -60,7 +60,7 @@ export default function ServiceDetail() {
             <li key={r} className="flex gap-2"><span style={{ color: healthStyle[s.health].color }} aria-hidden>›</span>{r}</li>
           ))}
         </ul>
-        {restart.isSuccess && <p className="mt-2 text-sm text-good">Reinício enviado ao agente: acompanhe em Resposta.</p>}
+        {restart.isSuccess && <p className="mt-2 text-sm text-good">Reinício enviado ao agente: acompanhe em Resposta automática.</p>}
         {restart.error && <ErrorNote error={restart.error} />}
 
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4 lg:grid-cols-8">
@@ -88,7 +88,7 @@ export default function ServiceDetail() {
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card title={<><ShieldCheck size={13} aria-hidden /> Segurança do app</>} className="xl:col-span-2">
+        <Card title={<><ShieldCheck size={15} className="text-muted" aria-hidden /> Segurança da aplicação</>} className="xl:col-span-2">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-line pb-3">
             <ScoreBadge score={s.securityScore} size="lg" />
             <p className="max-w-md text-xs text-muted">
@@ -97,7 +97,7 @@ export default function ServiceDetail() {
           </div>
           <SecurityChecklist checks={s.checks} />
         </Card>
-        <Card title={<><Activity size={13} aria-hidden /> Disponibilidade · 24h</>}>
+        <Card title={<><Activity size={15} className="text-muted" aria-hidden /> Disponibilidade · 24h</>}>
           <dl className="grid grid-cols-2 gap-4">
             <Stat label="Online no PM2" value={pct(s.availability.uptimePct)} />
             <Stat label="Checagens OK" value={pct(s.availability.probeOkPct)} />
@@ -115,7 +115,7 @@ export default function ServiceDetail() {
       <Vulnerabilities hostId={hostId} name={name} vulns={q.data.vulnerabilities} inventory={q.data.inventory} lockfile={a.security?.lockfile} cwd={a.cwd} />
 
       {a.sites && a.sites.length > 0 && (
-        <Card title={<><Globe size={13} aria-hidden /> Domínios e certificados</>}>
+        <Card title={<><Globe size={15} className="text-muted" aria-hidden /> Domínios e certificados</>}>
           <ul className="divide-y divide-line">
             {a.sites.map((site) => {
               const end = site.certificate?.notAfter ? new Date(site.certificate.notAfter) : null
@@ -144,7 +144,7 @@ export default function ServiceDetail() {
         action={
           <div className="flex gap-1 font-mono text-[11px]">
             {[6, 24, 72].map((h) => (
-              <button key={h} onClick={() => setHours(h)} className={`rounded-sm border px-2 py-0.5 ${h === hours ? 'border-hud text-ink' : 'border-transparent text-muted'}`}>{h}h</button>
+              <button key={h} onClick={() => setHours(h)} className={`rounded-md border px-2 py-0.5 ${h === hours ? 'border-hud text-ink' : 'border-transparent text-muted'}`}>{h}h</button>
             ))}
           </div>
         }>
@@ -159,7 +159,7 @@ export default function ServiceDetail() {
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title={<><Siren size={13} aria-hidden /> Incidentes deste app ({incidents.length})</>}>
+        <Card title={<><Siren size={15} className="text-muted" aria-hidden /> Incidentes desta aplicação ({incidents.length})</>}>
           {incidents.length === 0 && <Empty>Nenhum incidente ligado a este app.</Empty>}
           <ul className="divide-y divide-line">
             {incidents.map((i) => (
@@ -174,7 +174,7 @@ export default function ServiceDetail() {
             ))}
           </ul>
         </Card>
-        <Card title={<><History size={13} aria-hidden /> Histórico no PM2 · 7 dias</>}>
+        <Card title={<><History size={15} className="text-muted" aria-hidden /> Histórico no PM2 · 7 dias</>}>
           {events.length === 0 && <Empty>Sem mudanças de status ou reinícios registrados.</Empty>}
           <ol className="space-y-3">
             {events.map((e) => {
@@ -269,10 +269,10 @@ function Vulnerabilities({ hostId, name, vulns, inventory, lockfile, cwd }: {
   const devCount = vulns.filter((v) => v.dev).length
   const dir = (inventory?.lockfile ?? lockfile)?.replace(/\/(node_modules\/)?\.?package-lock\.json$|\/npm-shrinkwrap\.json$/, '') ?? cwd
   return (
-    <Card title={<><Bug size={13} aria-hidden /> Vulnerabilidades nas dependências</>}
+    <Card title={<><Bug size={15} className="text-muted" aria-hidden /> Vulnerabilidades nas dependências</>}
       action={
         <button onClick={() => scan.mutate()} disabled={scan.isPending || !inventory}
-          className="hud-label flex items-center gap-1 rounded-sm border border-line px-2 py-0.5 text-[10px] text-ink2 hover:bg-raised disabled:opacity-50">
+          className="hud-label flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-[10px] text-ink2 hover:bg-raised disabled:opacity-50">
           <RefreshCw size={11} className={scan.isPending ? 'animate-spin' : ''} aria-hidden /> Verificar agora
         </button>
       }>
@@ -309,7 +309,7 @@ function Vulnerabilities({ hostId, name, vulns, inventory, lockfile, cwd }: {
                   <td className="px-4 py-2"><VulnBadge level={v.severity} /></td>
                   <td className="py-2 font-mono text-xs">
                     {v.pkg}@{v.version}
-                    {v.dev && <span className="ml-1 rounded-sm bg-raised px-1 font-sans text-[10px] text-muted">dev</span>}
+                    {v.dev && <span className="ml-1 rounded-md bg-raised px-1 font-sans text-[10px] text-muted">dev</span>}
                   </td>
                   <td className="max-w-md py-2 text-xs text-ink2">{v.summary ?? '—'}</td>
                   <td className="py-2 font-mono text-xs">{v.fixedVersion ? <span className="text-good">{v.fixedVersion}</span> : <span className="text-muted">sem correção</span>}</td>

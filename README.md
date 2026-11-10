@@ -18,6 +18,9 @@ detecta, correlaciona e abre incidentes (com MITRE ATT&CK), e um dashboard React
 O backend roda **fora** da VPS monitorada. Se a VPS for comprometida, o atacante não consegue
 apagar o histórico, e o próprio silêncio do agente vira um incidente (`AGENT_OFFLINE`).
 
+> **Novo por aqui?** Leia o [Guia do VPS-SOC](docs/GUIA.md): explica em linguagem simples o
+> que o projeto faz, como rodar, um tour pelo painel e os problemas mais comuns.
+
 ## O que detecta (MVP)
 
 | Regra | Gatilho | Severidade | MITRE |
@@ -111,7 +114,7 @@ Políticas no `.env` do SOC (`AUTO`, `APPROVAL` ou `OFF`): `SOC_RESPONSE_BLOCK_B
 
 ## Serviços (PM2)
 
-A página **Serviços** mostra o mesmo que o `pm2 list` (id, nome, status, uptime, reinícios, CPU,
+A página **Aplicações** mostra o mesmo que o `pm2 list` (id, nome, status, uptime, reinícios, CPU,
 memória, usuário, modo) e acrescenta, para cada app:
 
 - **saúde**: Saudável, Degradado ou Fora do ar, com os motivos (status, reinícios na última hora, crash

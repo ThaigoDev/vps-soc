@@ -1,20 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, type Host, type MetricPoint } from '../api'
-import { Card, Empty, ErrorNote, chartTooltip, fmtBytes, fmtTime, timeAgo } from '../components/ui'
+import { Server } from 'lucide-react'
+import { Card, Empty, ErrorNote, PageHeader, chartTooltip, fmtBytes, fmtTime, timeAgo } from '../components/ui'
 import { CheckList, postureChecks } from '../components/SocMetrics'
 
 export default function Hosts() {
   const q = useQuery({ queryKey: ['hosts'], queryFn: () => api<Host[]>('/hosts'), refetchInterval: 10_000 })
-  if (q.error) return <ErrorNote error={q.error} />
-  if (q.data && q.data.length === 0) {
-    return (
-      <Card title="Hosts">
-        <Empty>Nenhum agente reportou ainda. Instale o agente na VPS (veja o README).</Empty>
-      </Card>
-    )
-  }
-  return <div className="space-y-4">{q.data?.map((h) => <HostCard key={h.id} host={h} />)}</div>
+  return (
+    <div>
+      <PageHeader icon={Server} title="Servidores"
+        description="Cada VPS com o agente instalado. Mostra se ela está respondendo, quanto de CPU, memória e disco usa, quem está logado, quais portas estão abertas e se a configuração de segurança está boa." />
+      {q.error && <ErrorNote error={q.error} />}
+      {q.data && q.data.length === 0 && (
+        <Card><Empty>Nenhum servidor conectado ainda. Instale o agente na VPS (veja Ajuda → Como conectar uma VPS).</Empty></Card>
+      )}
+      <div className="space-y-5">{q.data?.map((h) => <HostCard key={h.id} host={h} />)}</div>
+    </div>
+  )
 }
 
 function HostCard({ host: h }: { host: Host }) {
@@ -25,8 +28,10 @@ function HostCard({ host: h }: { host: Host }) {
       title={
         <span className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: online ? 'var(--good)' : 'var(--critical)' }} aria-hidden />
-          {h.id}
-          <span className="text-xs font-normal text-muted">{online ? 'Online' : 'Offline'} · visto {timeAgo(h.lastSeen)}</span>
+          <span className="text-base">{h.id}</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${online ? 'text-good' : 'text-critical'}`} style={{ background: `color-mix(in srgb, ${online ? 'var(--good)' : 'var(--critical)'} 14%, transparent)` }}>
+            {online ? 'Online' : `Offline · visto ${timeAgo(h.lastSeen)}`}
+          </span>
         </span>
       }
       action={<span className="text-xs text-muted">{h.os} · agente {h.agentVersion}</span>}
@@ -34,13 +39,13 @@ function HostCard({ host: h }: { host: Host }) {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Gauge label="CPU" value={m.cpuPercent} />
         <Gauge label="Memória" value={m.memPercent} hint={fmtBytes(m.memTotalBytes)} />
-        <Gauge label="Disco /" value={m.diskPercent} hint={fmtBytes(m.diskTotalBytes)} warnAt={85} />
+        <Gauge label="Disco" value={m.diskPercent} hint={fmtBytes(m.diskTotalBytes)} warnAt={85} />
         <div>
-          <p className="text-xs text-ink2">Load (1m)</p>
+          <p className="text-xs text-ink2" title="Média de processos esperando CPU no último minuto. Acima do número de núcleos = máquina sobrecarregada.">Carga (1 min)</p>
           <p className="tnum mt-1 text-2xl font-semibold">{m.load1?.toFixed(2) ?? '-'}</p>
         </div>
         <div>
-          <p className="text-xs text-ink2">Uptime</p>
+          <p className="text-xs text-ink2">Ligado há</p>
           <p className="tnum mt-1 text-2xl font-semibold">{m.uptimeSeconds ? `${Math.floor(m.uptimeSeconds / 86400)}d ${Math.floor((m.uptimeSeconds % 86400) / 3600)}h` : '-'}</p>
         </div>
       </div>
@@ -51,7 +56,7 @@ function HostCard({ host: h }: { host: Host }) {
         <Figure label="Rede ↑ saída" value={fmtRate(m.netTxBps)} hint="pico inesperado: exfiltração ou DDoS saindo" />
         <Figure label="Conexões TCP" value={m.tcpEstablished ?? '-'} hint="estabelecidas agora" />
         <Figure label="Processos" value={m.processes ?? '-'} />
-        <Figure label="Sessões abertas" value={h.posture?.sessions?.length ?? '-'} hint="usuários logados (who)" />
+        <Figure label="Pessoas logadas" value={h.posture?.sessions?.length ?? '-'} hint="usuários logados (who)" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -61,7 +66,8 @@ function HostCard({ host: h }: { host: Host }) {
 
       <div className="mt-5 grid gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="hud-label mb-2 text-[11px] font-semibold text-hud">Postura de segurança</h3>
+          <h3 className="mb-1 text-sm font-semibold">Checklist de segurança</h3>
+          <p className="mb-3 text-xs text-muted">Boas práticas verificadas automaticamente. Itens com X precisam de correção.</p>
           <CheckList checks={postureChecks(h)} />
           {h.response && (
             <p className="mt-3 text-xs text-muted">
@@ -70,7 +76,8 @@ function HostCard({ host: h }: { host: Host }) {
           )}
         </div>
         <div>
-          <h3 className="hud-label mb-2 text-[11px] font-semibold text-hud">Sessões interativas ({h.posture?.sessions?.length ?? 0})</h3>
+          <h3 className="mb-1 text-sm font-semibold">Quem está logado agora ({h.posture?.sessions?.length ?? 0})</h3>
+          <p className="mb-3 text-xs text-muted">Sessões abertas no terminal da VPS (comando who).</p>
           {h.posture?.sessions && h.posture.sessions.length > 0 ? (
             <ul className="space-y-1 font-mono text-xs">
               {h.posture.sessions.map((s) => (
@@ -88,7 +95,8 @@ function HostCard({ host: h }: { host: Host }) {
         </div>
       </div>
 
-      <h3 className="mb-2 mt-5 text-sm font-semibold">Portas em escuta ({h.openPorts?.length ?? 0})</h3>
+      <h3 className="mt-6 text-sm font-semibold">Portas abertas ({h.openPorts?.length ?? 0})</h3>
+      <p className="mb-2 text-xs text-muted">Programas esperando conexões. “Pública” = acessível pela internet; feche o que não precisa estar exposto.</p>
       {h.openPorts && h.openPorts.length > 0 ? (
         <div className="-mx-4 overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
@@ -161,12 +169,7 @@ function MetricsChart({ hostId }: { hostId: string }) {
           <CartesianGrid vertical={false} stroke="var(--line)" />
           <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 11 }} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} minTickGap={40} />
           <YAxis domain={[0, 100]} tick={{ fill: 'var(--muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
-          <Tooltip
-            contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12 }}
-            labelStyle={{ color: 'var(--ink)', fontWeight: 600 }}
-            itemStyle={{ color: 'var(--ink-2)' }}
-            cursor={{ stroke: 'var(--axis)' }}
-          />
+          <Tooltip cursor={{ stroke: 'var(--axis)' }} {...chartTooltip} />
           <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, color: 'var(--ink-2)' }} />
           {lines.map((l) => (
             <Line key={l.key} dataKey={l.key} name={l.label} stroke={l.color} strokeWidth={2} dot={false} isAnimationActive={false}
@@ -182,7 +185,7 @@ function Figure({ label, value, hint }: { label: string; value: string | number;
   return (
     <div title={hint}>
       <p className="text-xs text-ink2">{label}</p>
-      <p className="tnum mt-1 font-mono text-xl font-semibold">{value}</p>
+      <p className="tnum mt-1 text-xl font-semibold">{value}</p>
       {hint && <p className="text-[10px] leading-tight text-muted">{hint}</p>}
     </div>
   )
