@@ -47,6 +47,7 @@ public class Incident {
     private Instant acknowledgedAt;
     private Instant containedAt;
     private String containmentNote;
+    private String service;
 
     protected Incident() {
     }
@@ -133,6 +134,8 @@ public class Incident {
     public Instant getAcknowledgedAt() { return acknowledgedAt; }
     public Instant getContainedAt() { return containedAt; }
     public String getContainmentNote() { return containmentNote; }
+    public String getService() { return service; }
+    public void setService(String service) { this.service = clamp(service); }
 
     /** Titles can embed agent-reported paths; never let one overflow VARCHAR(255) and fail the batch. */
     private static String clamp(String s) {

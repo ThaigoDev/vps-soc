@@ -35,6 +35,49 @@ public class PostureEvaluator {
         updates(hostId, posture);
         reboot(hostId, posture.get("rebootRequired"));
         ssh(hostId, posture.get("ssh"));
+        certificates(hostId, posture.get("certificates"));
+    }
+
+    /** TLS certificates (certbot and nginx): expiring in 14 days or less, or already expired. */
+    private void certificates(String hostId, Object v) {
+        if (!(v instanceof List<?> list)) {
+            return;
+        }
+        java.time.Instant now = java.time.Instant.now();
+        Set<String> seen = new HashSet<>();
+        for (Object o : list) {
+            if (!(o instanceof Map<?, ?> c) || c.get("notAfter") == null || c.get("path") == null) {
+                continue;
+            }
+            String path = c.get("path").toString();
+            seen.add(path);
+            java.time.Instant notAfter;
+            try {
+                notAfter = java.time.Instant.parse(c.get("notAfter").toString());
+            } catch (java.time.format.DateTimeParseException e) {
+                continue;
+            }
+            long days = java.time.Duration.between(now, notAfter).toDays();
+            String names = c.get("dnsNames") instanceof List<?> dn && !dn.isEmpty()
+                    ? String.join(", ", dn.stream().map(String::valueOf).toList()) : String.valueOf(c.get("subject"));
+            if (days > 14) {
+                incidents.resolveActive(hostId, RuleIds.CERT_EXPIRING, path, "Certificado renovado: vale até " + notAfter);
+                continue;
+            }
+            boolean expired = notAfter.isBefore(now);
+            raise(Detection.raise(hostId, RuleIds.CERT_EXPIRING, path)
+                    .title(expired ? "Certificado TLS vencido: " + names : "Certificado TLS vence em %d dia(s): %s".formatted(days, names))
+                    .description("O certificado %s (%s, emitido por %s) %s em %s."
+                            .formatted(path, names, c.get("issuer"), expired ? "venceu" : "vence", notAfter))
+                    .severity(expired || days <= 3 ? Severity.HIGH : Severity.MEDIUM)
+                    .risk(expired ? 70 : days <= 3 ? 60 : 35)
+                    .build());
+        }
+        for (Incident open : repo.findByHostIdAndRuleIdAndStatusIn(hostId, RuleIds.CERT_EXPIRING, IncidentStatus.ACTIVE)) {
+            if (!seen.contains(open.getDedupKey())) {
+                incidents.resolveActive(hostId, RuleIds.CERT_EXPIRING, open.getDedupKey(), "O certificado não está mais em uso");
+            }
+        }
     }
 
     private void failedServices(String hostId, Object v) {

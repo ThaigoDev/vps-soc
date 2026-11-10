@@ -10,6 +10,7 @@ import com.vpssoc.domain.SecurityEvent;
 import com.vpssoc.domain.Severity;
 import com.vpssoc.incident.IncidentChanged;
 import com.vpssoc.repository.EventRepository;
+import com.vpssoc.service.ServiceDirectory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -36,8 +37,11 @@ public class ResponsePlanner {
     private final EventRepository events;
     private final SocProperties.Response cfg;
     private final Clock clock;
+    private final ServiceDirectory services;
 
-    public ResponsePlanner(ResponseService response, EventRepository events, SocProperties props, Clock clock) {
+    public ResponsePlanner(ResponseService response, EventRepository events, SocProperties props, Clock clock,
+                           ServiceDirectory services) {
+        this.services = services;
         this.clock = clock;
         this.response = response;
         this.events = events;
@@ -61,6 +65,11 @@ public class ResponsePlanner {
                             "Disco acima do limite: limpar journald antigo (mantém 500 MB) e o cache do apt");
                 }
             }
+            case RuleIds.SERVICE_DOWN -> {
+                if (change.created() && inc.getSeverity() == Severity.HIGH) { // status errored, not a deliberate stop
+                    restartPm2(inc);
+                }
+            }
             case RuleIds.SERVICE_FAILED -> {
                 if (change.created()) {
                     restartService(inc);
@@ -69,6 +78,17 @@ public class ResponsePlanner {
             default -> {
             }
         }
+    }
+
+    private void restartPm2(Incident inc) {
+        services.byName(inc.getHostId(), inc.getDedupKey()).ifPresent(s -> {
+            Map<String, Object> params = new HashMap<>();
+            params.put("name", s.get("name"));
+            params.put("pmId", s.get("pmId"));
+            params.put("pm2Home", s.get("pm2Home"));
+            response.request(inc.getHostId(), inc.getId(), Type.PM2_RESTART, "pm2:" + s.get("pm2Home") + "#" + s.get("pmId"), params,
+                    cfg.effective(cfg.restartPm2()), "App PM2 %s caiu (errored): tentar pm2 restart".formatted(s.get("name")));
+        });
     }
 
     private void restartService(Incident inc) {

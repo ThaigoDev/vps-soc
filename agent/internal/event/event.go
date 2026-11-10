@@ -24,6 +24,12 @@ const (
 	// ResponseExecuted reports a containment action the agent took on its own
 	// (e.g. the local brute-force guard blocking an IP while the SOC was offline).
 	ResponseExecuted = "RESPONSE_EXECUTED"
+
+	// PM2-managed apps (what `pm2 list` shows).
+	ServiceStatusChanged = "SERVICE_STATUS_CHANGED"
+	ServiceRestarted     = "SERVICE_RESTARTED"
+	ServiceAdded         = "SERVICE_ADDED"
+	ServiceRemoved       = "SERVICE_REMOVED"
 )
 
 type Event struct {

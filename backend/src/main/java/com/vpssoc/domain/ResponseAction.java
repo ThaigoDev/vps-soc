@@ -13,7 +13,7 @@ import java.util.Map;
 @Table(name = "response_actions")
 public class ResponseAction {
 
-    public enum Type { BLOCK_IP, UNBLOCK_IP, KILL_PROCESS, DISK_CLEANUP, RESTART_SERVICE }
+    public enum Type { BLOCK_IP, UNBLOCK_IP, KILL_PROCESS, DISK_CLEANUP, RESTART_SERVICE, PM2_RESTART }
 
     public enum Status {
         /** Waiting for a human to approve. */

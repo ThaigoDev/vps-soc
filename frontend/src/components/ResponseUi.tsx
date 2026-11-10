@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Ban, Check, CheckCircle2, Clock, Copy, Cpu, Eraser, Hourglass, RotateCcw, ShieldCheck, Unlock, X, XCircle } from 'lucide-react'
+import { Ban, Boxes, Check, CheckCircle2, Clock, Copy, Cpu, Eraser, Hourglass, RotateCcw, ShieldCheck, Unlock, X, XCircle } from 'lucide-react'
 import { api, type ActionStatus, type ActionType, type Policy, type ResponseAction } from '../api'
 import { ErrorNote, fmtTime, timeAgo } from './ui'
+import { useAlertSettings } from './Alerts'
 
 const statusStyle: Record<ActionStatus, { label: string; color: string; Icon: typeof Check }> = {
   PROPOSED: { label: 'Aguardando aprovação', color: 'var(--warning)', Icon: Hourglass },
@@ -22,6 +23,7 @@ export const actionIcon: Record<ActionType, typeof Ban> = {
   KILL_PROCESS: Cpu,
   DISK_CLEANUP: Eraser,
   RESTART_SERVICE: RotateCcw,
+  PM2_RESTART: Boxes,
 }
 
 export const policyLabel: Record<Policy, string> = {
@@ -34,8 +36,8 @@ export const policyLabel: Record<Policy, string> = {
 export function ActionStatusBadge({ status }: { status: ActionStatus }) {
   const s = statusStyle[status]
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-ink"
-      style={{ borderColor: s.color, background: `color-mix(in srgb, ${s.color} 12%, transparent)` }}>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium text-ink"
+      style={{ borderColor: `color-mix(in srgb, ${s.color} 55%, transparent)`, background: `color-mix(in srgb, ${s.color} 12%, transparent)` }}>
       <s.Icon size={12} style={{ color: s.color }} aria-hidden />
       {s.label}
     </span>
@@ -55,11 +57,12 @@ export function useActionMutations() {
 /** One response action: what, why, who decided, outcome, and approve/dismiss when it waits. */
 export function ActionCard({ a, showIncident = false }: { a: ResponseAction; showIncident?: boolean }) {
   const { approve, dismiss } = useActionMutations()
+  const { play } = useAlertSettings()
   const Icon = actionIcon[a.type]
   const who = a.origin === 'AGENT' ? 'pelo agente (guarda local)' : a.mode === 'AUTO' ? 'automático' : 'manual'
   const busy = approve.isPending || dismiss.isPending
   return (
-    <li className="border border-line bg-page p-3">
+    <li className="rounded-lg border border-line bg-page p-3">
       <div className="flex flex-wrap items-center gap-2">
         <Icon size={15} className="text-hud" aria-hidden />
         <span className="font-semibold">{a.label}</span>
@@ -74,12 +77,12 @@ export function ActionCard({ a, showIncident = false }: { a: ResponseAction; sho
       {a.result && <p className="mt-1 break-words font-mono text-xs text-ink">{a.result}</p>}
       {a.status === 'PROPOSED' && (
         <div className="mt-2 flex gap-2">
-          <button onClick={() => approve.mutate(a.id)} disabled={busy}
-            className="hud-label flex items-center gap-1 rounded-sm border border-good px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-raised disabled:opacity-50">
+          <button onClick={() => { play('click'); approve.mutate(a.id) }} disabled={busy}
+            className="hud-label flex items-center gap-1 rounded-md border border-good px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-raised disabled:opacity-50">
             <ShieldCheck size={13} aria-hidden /> Aprovar e executar
           </button>
           <button onClick={() => dismiss.mutate(a.id)} disabled={busy}
-            className="hud-label flex items-center gap-1 rounded-sm border border-line px-2.5 py-1 text-[11px] text-ink2 hover:bg-raised disabled:opacity-50">
+            className="hud-label flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[11px] text-ink2 hover:bg-raised disabled:opacity-50">
             <X size={13} aria-hidden /> Descartar
           </button>
         </div>
@@ -102,7 +105,7 @@ export function CommandBlock({ command }: { command: string }) {
     }
   }
   return (
-    <div className="mt-1.5 flex items-start gap-2 border border-line bg-page px-2.5 py-1.5">
+    <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-line bg-page px-3 py-2">
       <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-xs text-ink">{command}</code>
       <button onClick={copy} className="shrink-0 text-muted hover:text-ink" title="Copiar comando" aria-label="Copiar comando">
         {copied ? <Check size={14} className="text-good" aria-hidden /> : <Copy size={14} aria-hidden />}

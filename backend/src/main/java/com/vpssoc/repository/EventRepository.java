@@ -64,6 +64,30 @@ public interface EventRepository extends JpaRepository<SecurityEvent, Long>, Jpa
             group by username order by 2 desc limit :limit""", nativeQuery = true)
     List<Object[]> topTargetedUsernames(@Param("since") Instant since, @Param("limit") int limit);
 
+    /**
+     * Restarts of one PM2 app since :since, summing the agent's per-scan deltas per instance
+     * and taking the busiest instance (a cluster reload restarts every instance once).
+     */
+    @Query(value = """
+            select coalesce(max(n), 0) from (
+                select sum(coalesce((metadata->>'delta')::int, 1)) as n from events
+                where host_id = :hostId and type = 'SERVICE_RESTARTED' and metadata->>'service' = :name
+                  and occurred_at > :since
+                group by metadata->>'pmId') per_instance""", nativeQuery = true)
+    long sumServiceRestarts(@Param("hostId") String hostId, @Param("name") String name, @Param("since") Instant since);
+
+    @Query(value = """
+            select id from events
+            where host_id = :hostId and type like 'SERVICE_%' and metadata->>'service' = :name and occurred_at > :since
+            order by occurred_at desc limit 200""", nativeQuery = true)
+    List<Long> serviceEventIds(@Param("hostId") String hostId, @Param("name") String name, @Param("since") Instant since);
+
+    @Query(value = """
+            select e.* from events e
+            where e.host_id = :hostId and e.type like 'SERVICE_%' and e.metadata->>'service' = :name and e.occurred_at > :since
+            order by e.occurred_at desc limit 200""", nativeQuery = true)
+    List<SecurityEvent> serviceEvents(@Param("hostId") String hostId, @Param("name") String name, @Param("since") Instant since);
+
     long countByOccurredAtAfter(Instant since);
 
     long countByTypeInAndOccurredAtAfter(Collection<EventType> types, Instant since);

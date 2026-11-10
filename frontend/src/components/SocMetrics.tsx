@@ -4,10 +4,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CheckCircle2, Gauge, Hourglass, ShieldAlert, Users, XCircle } from 'lucide-react'
 import { api, type Host, type Kpis } from '../api'
-import { Card, Empty, ErrorNote, chartTooltip } from './ui'
+import { Card, Empty, ErrorNote, Segmented, chartTooltip } from './ui'
 import { fmtDuration } from './ResponseUi'
 
-const ruleLabel: Record<string, string> = {
+export const ruleLabel: Record<string, string> = {
   SSH_BRUTE_FORCE: 'Brute force SSH',
   SSH_LOGIN_AFTER_BRUTE_FORCE: 'Login após brute force',
   SSH_ROOT_LOGIN: 'Login root',
@@ -27,6 +27,13 @@ const ruleLabel: Record<string, string> = {
   SECURITY_UPDATES: 'Patches pendentes',
   REBOOT_REQUIRED: 'Reboot pendente',
   SSH_WEAK_CONFIG: 'SSH fraco',
+  SERVICE_DOWN: 'App PM2 caiu',
+  SERVICE_CRASH_LOOP: 'App PM2 em crash loop',
+  SERVICE_HIGH_MEMORY: 'App PM2 com memória alta',
+  SERVICE_VULNERABLE: 'Dependências vulneráveis',
+  SERVICE_DEBUG_EXPOSED: 'Debugger do Node aberto',
+  SERVICE_NOT_RESPONDING: 'App não responde',
+  CERT_EXPIRING: 'Certificado TLS vencendo',
 }
 
 export function useKpis(days: number) {
@@ -39,10 +46,13 @@ export function ApprovalBanner() {
   const n = q.data?.actionsAwaitingApproval ?? 0
   if (n === 0) return null
   return (
-    <Link to="/response" className="panel flex items-center gap-3 border border-warning bg-surface px-4 py-3 hover:bg-raised">
-      <Hourglass size={18} className="text-warning" aria-hidden />
-      <span className="font-semibold">{n} ação{n === 1 ? '' : 'ões'} de resposta aguardando sua aprovação</span>
-      <span className="hud-label ml-auto text-[10px] text-hud">Revisar →</span>
+    <Link to="/response" className="flex items-center gap-3 rounded-xl border border-warning bg-surface px-4 py-3 hover:bg-raised">
+      <Hourglass size={18} className="shrink-0 text-warning" aria-hidden />
+      <span>
+        <span className="block font-semibold">{n} {n === 1 ? 'ação' : 'ações'} de defesa esperando sua aprovação</span>
+        <span className="block text-xs text-muted">O SOC sugeriu algo (ex.: bloquear um IP) mas precisa do seu OK para executar.</span>
+      </span>
+      <span className="ml-auto whitespace-nowrap text-sm font-medium text-hud">Revisar →</span>
     </Link>
   )
 }
@@ -53,38 +63,33 @@ export function SocKpis() {
   const q = useKpis(days)
   const k = q.data
   return (
-    <Card title={<><Gauge size={13} aria-hidden /> Desempenho do SOC</>}
-      action={
-        <div className="flex gap-1 font-mono text-[11px]">
-          {[7, 30, 90].map((d) => (
-            <button key={d} onClick={() => setDays(d)} className={`rounded-sm border px-2 py-0.5 ${d === days ? 'border-hud text-ink' : 'border-transparent text-muted hover:text-ink2'}`}>{d}d</button>
-          ))}
-        </div>
-      }>
+    <Card title={<><Gauge size={15} className="text-muted" aria-hidden /> Desempenho do SOC</>}
+      description="Quanto tempo leva cada etapa da resposta a um incidente. Quanto menor, melhor."
+      action={<Segmented label="Período" value={days} onChange={setDays} options={[{ value: 7, label: '7 dias' }, { value: 30, label: '30 dias' }, { value: 90, label: '90 dias' }]} />}>
       {q.error && <ErrorNote error={q.error} />}
       {k && (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Tile label="MTTD · detectar" value={fmtDuration(k.mttdSeconds)} hint="Da primeira evidência até virar incidente" />
-            <Tile label="MTTA · reconhecer" value={fmtDuration(k.mttaSeconds)} hint="Do incidente até alguém assumir a análise" />
-            <Tile label="MTTC · conter" value={fmtDuration(k.mttcSeconds)} hint="Do incidente até a ameaça ser contida (ex.: IP bloqueado)" />
-            <Tile label="MTTR · resolver" value={fmtDuration(k.mttrSeconds)} hint="Do incidente até ser resolvido" />
+            <Tile label="Tempo para detectar" abbr="MTTD" value={fmtDuration(k.mttdSeconds)} hint="Do primeiro sinal suspeito até o SOC abrir o incidente." />
+            <Tile label="Tempo para alguém assumir" abbr="MTTA" value={fmtDuration(k.mttaSeconds)} hint="Do incidente aberto até uma pessoa clicar em “Assumir análise”." />
+            <Tile label="Tempo para conter" abbr="MTTC" value={fmtDuration(k.mttcSeconds)} hint="Do incidente até a ameaça ser parada (ex.: IP bloqueado)." />
+            <Tile label="Tempo para resolver" abbr="MTTR" value={fmtDuration(k.mttrSeconds)} hint="Do incidente aberto até ser marcado como resolvido." />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-            <Small label="Incidentes" value={k.incidentsOpened} hint={`${k.incidentsResolved} resolvidos`} />
-            <Small label="Backlog aberto" value={k.backlog} tone={k.backlog > 0 ? 'var(--serious)' : undefined} />
-            <Small label="Contenção automática" value={pct(k.autoContainmentRate)} hint={`${k.containedAutomatically} de ${k.contained} contidos`} />
-            <Small label="Falsos positivos" value={pct(k.falsePositiveRate)} hint={`${k.falsePositives} marcados`} />
-            <Small label="IPs bloqueados" value={k.activeBlocks} />
+            <Small label="Incidentes no período" value={k.incidentsOpened} hint={`${k.incidentsResolved} resolvido(s)`} />
+            <Small label="Ainda abertos" value={k.backlog} tone={k.backlog > 0 ? 'var(--serious)' : undefined} />
+            <Small label="Contidos sozinhos" value={pct(k.autoContainmentRate)} hint={`${k.containedAutomatically} de ${k.contained}, sem ação humana`} />
+            <Small label="Alarmes falsos" value={pct(k.falsePositiveRate)} hint={`${k.falsePositives} marcados como falso positivo`} />
+            <Small label="IPs bloqueados agora" value={k.activeBlocks} />
             <Small label="Pacotes descartados" value={k.droppedPackets.toLocaleString('pt-BR')} hint="pelo firewall do agente" />
-            <Small label="Eventos/min" value={k.eventsPerMinute.toFixed(1)} hint="média da última hora" />
-            <Small label="Atraso dos dados" value={fmtDuration(k.maxDataLagSeconds)} hint="último contato do agente" tone={k.maxDataLagSeconds > 120 ? 'var(--critical)' : undefined} />
+            <Small label="Eventos por minuto" value={k.eventsPerMinute.toFixed(1)} hint="média da última hora" />
+            <Small label="Último contato do agente" value={fmtDuration(k.maxDataLagSeconds)} hint="há quanto tempo chegou o último dado" tone={k.maxDataLagSeconds > 120 ? 'var(--critical)' : undefined} />
           </div>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-xs text-ink2">
-            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-good" aria-hidden /> {k.actionsAuto} ações automáticas</span>
-            <span className="flex items-center gap-1"><Users size={12} className="text-hud" aria-hidden /> {k.actionsManual} manuais</span>
-            <span className="flex items-center gap-1"><XCircle size={12} className="text-critical" aria-hidden /> {k.actionsFailed} falhas/recusas</span>
-            <Link to="/response" className="flex items-center gap-1 hover:text-ink"><Hourglass size={12} className="text-warning" aria-hidden /> {k.actionsAwaitingApproval} aguardando aprovação</Link>
+            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-good" aria-hidden /> Ações automáticas: {k.actionsAuto}</span>
+            <span className="flex items-center gap-1"><Users size={12} className="text-hud" aria-hidden /> Manuais: {k.actionsManual}</span>
+            <span className="flex items-center gap-1"><XCircle size={12} className="text-critical" aria-hidden /> Falharam ou recusadas: {k.actionsFailed}</span>
+            <Link to="/response" className="flex items-center gap-1 hover:text-ink"><Hourglass size={12} className="text-warning" aria-hidden /> Esperando aprovação: {k.actionsAwaitingApproval}</Link>
           </div>
         </>
       )}
@@ -92,12 +97,12 @@ export function SocKpis() {
   )
 }
 
-function Tile({ label, value, hint }: { label: string; value: string; hint: string }) {
+function Tile({ label, abbr, value, hint }: { label: string; abbr: string; value: string; hint: string }) {
   return (
-    <div className="border border-line bg-page p-3" title={hint}>
-      <p className="hud-label text-[10px] text-muted">{label}</p>
-      <p className="tnum mt-1 font-mono text-2xl font-bold">{value}</p>
-      <p className="mt-0.5 text-[11px] leading-tight text-muted">{hint}</p>
+    <div className="rounded-lg border border-line bg-page p-3">
+      <p className="text-xs font-medium text-ink2">{label} <span className="text-muted">({abbr})</span></p>
+      <p className="tnum mt-1 text-2xl font-semibold">{value}</p>
+      <p className="mt-0.5 text-xs leading-snug text-muted">{hint}</p>
     </div>
   )
 }
@@ -105,9 +110,9 @@ function Tile({ label, value, hint }: { label: string; value: string; hint: stri
 function Small({ label, value, hint, tone }: { label: string; value: string | number; hint?: string; tone?: string }) {
   return (
     <div title={hint}>
-      <p className="hud-label text-[10px] text-muted">{label}</p>
-      <p className="tnum font-mono text-lg font-bold" style={tone ? { color: tone } : undefined}>{value}</p>
-      {hint && <p className="text-[10px] leading-tight text-muted">{hint}</p>}
+      <p className="text-xs text-muted">{label}</p>
+      <p className="tnum text-lg font-semibold" style={tone ? { color: tone } : undefined}>{value}</p>
+      {hint && <p className="text-[11px] leading-tight text-muted">{hint}</p>}
     </div>
   )
 }
@@ -121,7 +126,7 @@ export function IncidentTrend({ className }: { className?: string }) {
   const q = useKpis(14)
   const data = q.data?.daily.map((d) => ({ ...d, label: d.day.slice(8, 10) + '/' + d.day.slice(5, 7) }))
   return (
-    <Card fill className={className} title="Incidentes por dia · abertos × fechados">
+    <Card fill className={className} title="Incidentes abertos × fechados por dia" description="Se as barras de “fechados” acompanham as de “abertos”, a equipe está dando conta.">
       {q.error && <ErrorNote error={q.error} />}
       <div className="min-h-56 flex-1">
         {data && (
@@ -131,7 +136,7 @@ export function IncidentTrend({ className }: { className?: string }) {
               <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 11 }} tickLine={false} axisLine={{ stroke: 'var(--axis)' }} />
               <YAxis tick={{ fill: 'var(--muted)', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip cursor={{ fill: 'var(--raised)' }} {...chartTooltip} />
-              <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12, color: 'var(--ink-2)' }} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: 'var(--ink-2)' }} />
               <Bar dataKey="opened" name="Abertos" fill="var(--s1)" radius={[4, 4, 0, 0]} maxBarSize={18} />
               <Bar dataKey="closed" name="Fechados" fill="var(--s2)" radius={[4, 4, 0, 0]} maxBarSize={18} />
             </BarChart>
@@ -150,30 +155,30 @@ export function TopDetections() {
   const max = Math.max(1, ...rules.map((r) => r.incidents))
   const umax = Math.max(1, ...users.map((u) => u.count))
   return (
-    <Card title={<><ShieldAlert size={13} aria-hidden /> Detecções mais frequentes · 30d</>}>
+    <Card title={<><ShieldAlert size={15} className="text-muted" aria-hidden /> O que mais dispara · 30 dias</>} description="Regras que mais abriram incidentes. FP = alarme falso.">
       {q.data && rules.length === 0 && <Empty>Nenhum incidente no período.</Empty>}
       <ul className="space-y-2">
         {rules.map((r) => (
           <li key={r.ruleId} title={`${r.incidents} incidentes, ${r.falsePositives} falsos positivos`}>
             <div className="flex justify-between text-xs">
               <span>{ruleLabel[r.ruleId] ?? r.ruleId}</span>
-              <span className="tnum font-mono text-ink2">{r.incidents}{r.falsePositives > 0 && <span className="text-muted"> · {r.falsePositives} FP</span>}</span>
+              <span className="tnum text-ink2">{r.incidents}{r.falsePositives > 0 && <span className="text-muted"> · {r.falsePositives} FP</span>}</span>
             </div>
-            <div className="mt-1 h-1.5 bg-raised">
-              <div className="h-full rounded-r-[4px]" style={{ width: `${(r.incidents / max) * 100}%`, background: 'var(--s1)' }} />
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-raised">
+              <div className="h-full rounded-full" style={{ width: `${(r.incidents / max) * 100}%`, background: 'var(--s1)' }} />
             </div>
           </li>
         ))}
       </ul>
       {users.length > 0 && (
         <>
-          <p className="hud-label mb-2 mt-4 border-t border-line pt-3 text-[10px] text-muted">Usuários mais atacados · 24h</p>
+          <p className="mb-2 mt-4 border-t border-line pt-3 text-xs font-medium text-muted">Usuários mais tentados por atacantes · 24h</p>
           <ul className="space-y-1.5">
             {users.map((u) => (
               <li key={u.name} className="flex items-center gap-2 text-xs">
-                <span className="w-24 truncate font-mono">{u.name || '(vazio)'}</span>
-                <div className="h-1.5 flex-1 bg-raised">
-                  <div className="h-full rounded-r-[4px]" style={{ width: `${(u.count / umax) * 100}%`, background: 'var(--s2)' }} />
+                <span className="w-24 truncate font-mono text-xs">{u.name || '(vazio)'}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
+                  <div className="h-full rounded-full" style={{ width: `${(u.count / umax) * 100}%`, background: 'var(--s2)' }} />
                 </div>
                 <span className="tnum w-10 text-right font-mono text-ink2">{u.count}</span>
               </li>

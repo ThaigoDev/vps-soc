@@ -61,6 +61,9 @@ public class IncidentService {
             boolean escalated = d.severity().compareTo(inc.getSeverity()) > 0;
             inc.setTitle(d.title());
             inc.setDescription(d.description());
+            if (inc.getService() == null && d.service() != null) {
+                inc.setService(d.service());
+            }
             inc.setSeverity(Severity.max(inc.getSeverity(), d.severity()));
             inc.setRiskScore(Math.max(inc.getRiskScore(), d.riskScore()));
             inc.addTechniques(d.techniques());
@@ -79,6 +82,7 @@ public class IncidentService {
         inc.setRiskScore(d.riskScore());
         inc.setSourceIp(d.sourceIp());
         inc.setUsername(d.username());
+        inc.setService(d.service());
         inc.addTechniques(d.techniques());
         incidents.save(inc);
 

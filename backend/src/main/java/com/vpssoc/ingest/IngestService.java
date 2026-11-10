@@ -6,6 +6,7 @@ import com.vpssoc.detection.Detection;
 import com.vpssoc.detection.DetectionEngine;
 import com.vpssoc.detection.PostureEvaluator;
 import com.vpssoc.response.ResponseService;
+import com.vpssoc.service.ServiceEvaluator;
 import com.vpssoc.detection.rules.RuleIds;
 import com.vpssoc.domain.*;
 import com.vpssoc.incident.IncidentService;
@@ -48,11 +49,14 @@ public class IngestService {
     private final ObjectMapper mapper;
     private final Clock clock;
     private final PostureEvaluator posture;
+    private final ServiceEvaluator serviceEvaluator;
     private final ResponseService response;
 
     public IngestService(HostRepository hosts, EventRepository events, HostMetricRepository metrics,
                          DetectionEngine engine, IncidentService incidents, SocProperties props,
-                         ObjectMapper mapper, Clock clock, PostureEvaluator posture, ResponseService response) {
+                         ObjectMapper mapper, Clock clock, PostureEvaluator posture, ResponseService response,
+                         ServiceEvaluator serviceEvaluator) {
+        this.serviceEvaluator = serviceEvaluator;
         this.posture = posture;
         this.response = response;
         this.hosts = hosts;
@@ -107,6 +111,10 @@ public class IngestService {
         host.setOpenPorts(hb.openPorts());
         host.setPosture(hb.posture());
         host.setResponse(hb.response());
+        if (hb.services() != null) {
+            host.setServices(hb.services());
+        }
+        host.setPm2(hb.pm2());
 
         var m = hb.metrics();
         if (m != null) {
@@ -117,6 +125,7 @@ public class IngestService {
             checkDisk(host, m.diskPercent());
         }
         posture.evaluate(host.getId(), hb.posture());
+        serviceEvaluator.evaluate(host, hb.services(), m == null ? null : m.memTotalBytes(), now);
     }
 
     private Host touchHost(String hostId, String remoteIp, Instant now) {

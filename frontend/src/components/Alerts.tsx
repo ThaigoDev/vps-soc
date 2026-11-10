@@ -8,8 +8,9 @@ import { severityRank, timeAgo } from './ui'
 /*
  * Emergency alerting. Every open incident is remembered with the severity it had when we last
  * alerted on it; a new incident, or one that escalated, at HIGH or above raises an alert:
- *   CRITICAL -> full-screen alarm with siren until someone takes it or silences it;
- *   HIGH     -> toast with a short beep.
+ *   CRITICAL -> full-screen alarm with a looping alarm sound until someone takes it or silences it;
+ *   HIGH     -> toast with a short alert sound.
+ * Sound effects live in public/sounds (see SFX); the synth siren is only a fallback.
  * Both also fire a browser notification (when allowed) and flash the tab title.
  */
 
@@ -89,7 +90,7 @@ function tone(freqFrom: number, freqTo: number, start: number, duration: number,
   osc.stop(t + duration + 0.05)
 }
 
-/** One cycle of a two-tone siren (~1.4s). */
+/** One cycle of a two-tone siren (~1.4s): fallback when the sound files cannot load. */
 function sirenCycle() {
   tone(650, 1250, 0, 0.6)
   tone(1250, 650, 0.65, 0.6)
@@ -100,6 +101,61 @@ function beep() {
   tone(880, 880, 0.2, 0.12, 0.12)
 }
 
+// ---- sound effects -------------------------------------------------------------------------
+
+/** Clips cut from the futuristic UI sound pack (public/sounds), one per kind of moment. */
+const SFX = {
+  startup: '/sounds/startup.mp3', // power-up swell ending in an impact: entering the console
+  alarm: '/sounds/alarm-critical.mp3', // rising chirp with harmonics, looped while a CRITICAL alarm is up
+  high: '/sounds/alert-high.mp3', // low hit + chime: HIGH toast
+  success: '/sounds/action-success.mp3', // short upward blip: a containment action succeeded
+  linkLost: '/sounds/link-lost.mp3', // digital glitch: the dashboard lost the backend
+  click: '/sounds/click.mp3', // tick: confirmations
+} as const
+
+export type Sfx = keyof typeof SFX
+
+const buffers = new Map<Sfx, Promise<AudioBuffer | null>>()
+
+function loadSfx(name: Sfx): Promise<AudioBuffer | null> {
+  const ctx = audioContext()
+  if (!ctx) return Promise.resolve(null)
+  let p = buffers.get(name)
+  if (!p) {
+    p = fetch(SFX[name])
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.statusText))))
+      .then((b) => ctx.decodeAudioData(b))
+      .catch(() => null)
+    buffers.set(name, p)
+  }
+  return p
+}
+
+/** Plays a clip; returns false when it could not (audio locked or file missing). */
+async function playSfx(name: Sfx, volume = 0.8): Promise<boolean> {
+  const ctx = audioContext()
+  if (!ctx || ctx.state !== 'running') return false
+  const buf = await loadSfx(name)
+  if (!buf) return false
+  const src = ctx.createBufferSource()
+  const gain = ctx.createGain()
+  gain.gain.value = volume
+  src.buffer = buf
+  src.connect(gain).connect(ctx.destination)
+  src.start()
+  return true
+}
+
+function soundOn(): boolean {
+  return load<Settings>(SETTINGS_KEY)?.sound ?? true
+}
+
+/** For screens outside the alert provider (login): plays only when sound is enabled. */
+export async function playStartup() {
+  unlockAudio()
+  if (soundOn()) await playSfx('startup', 0.7)
+}
+
 // ---- context -----------------------------------------------------------------------------
 
 interface AlertState {
@@ -108,6 +164,8 @@ interface AlertState {
   setNotify: (on: boolean) => Promise<void>
   notifyPermission: NotificationPermission | 'unsupported'
   testAlarm: () => void
+  /** Plays a sound effect if the operator has sound on. */
+  play: (name: Sfx) => void
 }
 
 const AlertContext = createContext<AlertState | null>(null)
@@ -150,9 +208,24 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   }
 
   const setSound = (on: boolean) => {
-    if (on) unlockAudio()
+    if (on) {
+      unlockAudio()
+      void playSfx('click', 0.6)
+    }
     update({ ...settingsRef.current, sound: on })
   }
+
+  const play = useCallback((name: Sfx) => {
+    if (settingsRef.current.sound) void playSfx(name, name === 'click' ? 0.6 : 0.8)
+  }, [])
+
+  // Decode the clips once audio is available, so the first alarm plays without delay.
+  useEffect(() => {
+    const warm = () => (Object.keys(SFX) as Sfx[]).forEach((n) => void loadSfx(n))
+    warm()
+    window.addEventListener('pointerdown', warm, { once: true })
+    return () => window.removeEventListener('pointerdown', warm)
+  }, [])
 
   const setNotify = async (on: boolean) => {
     if (on && 'Notification' in window && Notification.permission !== 'granted') {
@@ -180,7 +253,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
       setAlarms((a) => (a.some((x) => x.id === inc.id) ? a : [...a, inc]))
     } else {
       setToasts((t) => (t.some((x) => x.id === inc.id) ? t : [...t, inc]))
-      if (settingsRef.current.sound) beep()
+      if (settingsRef.current.sound) void playSfx('high').then((ok) => ok || beep())
       window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== inc.id)), 20_000)
     }
     if (settingsRef.current.notify && 'Notification' in window && Notification.permission === 'granted' && inc.id > 0) {
@@ -226,13 +299,27 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     save(SEEN_KEY, next)
   }, [q.data, raise])
 
-  // Siren while a critical alarm is on screen.
+  // Alarm loop while a critical alarm is on screen (synth siren if the clip cannot play).
   useEffect(() => {
     if (alarms.length === 0 || !settings.sound) return
-    sirenCycle()
-    const t = window.setInterval(sirenCycle, 1_600)
+    const cycle = () => void playSfx('alarm', 0.9).then((ok) => ok || sirenCycle())
+    cycle()
+    const t = window.setInterval(cycle, 1_600)
     return () => window.clearInterval(t)
   }, [alarms.length, settings.sound])
+
+  // Short confirmation when a containment action succeeds (IP blocked, process killed...).
+  const actions = useQuery({
+    queryKey: ['actions', 'sound-watch'],
+    queryFn: () => api<Page<{ id: number }>>(`/response/actions${qs({ status: 'SUCCEEDED', size: 1 })}`),
+    refetchInterval: 10_000,
+  })
+  const lastAction = useRef<number | null>(null)
+  useEffect(() => {
+    const top = actions.data?.content[0]?.id ?? 0
+    if (lastAction.current !== null && top > lastAction.current) play('success')
+    if (actions.data) lastAction.current = top
+  }, [actions.data, play])
 
   // Flash the tab title while alarms are pending.
   useEffect(() => {
@@ -253,7 +340,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
   }, [alarms.length])
 
   const value = useMemo(
-    () => ({ settings, setSound, setNotify, notifyPermission, testAlarm }),
+    () => ({ settings, setSound, setNotify, notifyPermission, testAlarm, play }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [settings, notifyPermission],
   )
@@ -315,7 +402,7 @@ function AlarmModal({ incident: i, queued, onClose, onSilenceAll }: {
             <p className="hud-label font-bold text-critical">Alerta crítico{isTest ? ' · teste' : ''}</p>
             <p className="font-mono text-xs text-ink2">Host {i.hostId} · {timeAgo(i.lastSeen)}</p>
           </div>
-          {queued > 0 && <span className="hud-label rounded-sm bg-critical px-2 py-1 font-bold text-white">+{queued} na fila</span>}
+          {queued > 0 && <span className="hud-label rounded-md bg-critical px-2 py-1 font-bold text-white">+{queued} na fila</span>}
         </div>
         <div className="space-y-3 px-5 py-4">
           <h2 id="alarm-title" className="text-lg font-semibold leading-snug">{i.title}</h2>
@@ -329,13 +416,13 @@ function AlarmModal({ incident: i, queued, onClose, onSilenceAll }: {
           {i.techniques.length > 0 && (
             <p className="flex flex-wrap gap-1">
               {i.techniques.map((t) => (
-                <span key={t.id} className="rounded-sm border border-line bg-raised px-1.5 py-0.5 font-mono text-[11px] text-ink2" title={t.name}>{t.id}</span>
+                <span key={t.id} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11px] text-ink2" title={t.name}>{t.id}</span>
               ))}
             </p>
           )}
           {settings.sound && !unlocked && (
             <button onClick={unlockAudio}
-              className="alarm-blink flex w-full items-center justify-center gap-2 rounded-sm border-2 border-warning px-3 py-2 text-sm font-semibold text-warning">
+              className="alarm-blink flex w-full items-center justify-center gap-2 rounded-md border-2 border-warning px-3 py-2 text-sm font-semibold text-warning">
               <Volume2 size={16} aria-hidden /> O navegador bloqueou o som: clique para ativar a sirene
             </button>
           )}
@@ -343,16 +430,16 @@ function AlarmModal({ incident: i, queued, onClose, onSilenceAll }: {
         </div>
         <div className="flex flex-wrap gap-2 border-t border-line px-5 py-3">
           <button onClick={take} disabled={ack.isPending} autoFocus
-            className="flex-1 rounded-sm bg-critical px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60">
+            className="flex-1 rounded-md bg-critical px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60">
             {ack.isPending ? 'Assumindo…' : isTest ? 'Encerrar teste' : 'Assumir incidente'}
           </button>
           {!isTest && (
             <button onClick={() => { onClose(); navigate(`/incidents/${i.id}`) }}
-              className="rounded-sm border border-line px-3 py-2 text-sm hover:bg-raised">
+              className="rounded-md border border-line px-3 py-2 text-sm hover:bg-raised">
               Ver detalhes
             </button>
           )}
-          <button onClick={queued > 0 ? onSilenceAll : onClose} className="rounded-sm border border-line px-3 py-2 text-sm text-ink2 hover:bg-raised">
+          <button onClick={queued > 0 ? onSilenceAll : onClose} className="rounded-md border border-line px-3 py-2 text-sm text-ink2 hover:bg-raised">
             {queued > 0 ? 'Silenciar todos' : 'Silenciar'}
           </button>
         </div>
@@ -393,37 +480,79 @@ function Toasts({ toasts, onClose }: { toasts: Incident[]; onClose: (id: number)
 }
 
 /** Header toggles: sound, browser notifications, alarm test. */
-export function AlertControls() {
+/**
+ * One "Alertas" button in the top bar instead of four chips: sound, browser notifications,
+ * Telegram and a test alarm all live in its menu.
+ */
+export function AlertMenu() {
   const { settings, setSound, setNotify, notifyPermission, testAlarm } = useAlertSettings()
   const unlocked = useAudioUnlocked()
-  const btn = 'flex items-center gap-1.5 rounded-sm border border-line px-2 py-1 text-xs hover:bg-raised'
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: PointerEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', close)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open])
+  const needsUnlock = settings.sound && !unlocked
   return (
-    <div className="flex items-center gap-1.5">
-      {settings.sound && !unlocked && (
-        <button onClick={unlockAudio} className="alarm-blink flex items-center gap-1.5 rounded-sm border border-warning px-2 py-1 text-xs font-semibold text-warning"
-          title="O navegador só libera áudio depois de um clique. Clique para armar a sirene.">
-          <VolumeX size={14} aria-hidden />
-          Ativar som
+    <div className="relative" ref={box}>
+      {needsUnlock && (
+        <button onClick={unlockAudio} className="alarm-blink mr-2 inline-flex items-center gap-1.5 rounded-md border border-warning px-2 py-1 text-xs font-semibold text-warning"
+          title="O navegador só libera som depois de um clique. Clique para ativar o alarme sonoro.">
+          <VolumeX size={14} aria-hidden /> Ativar som
         </button>
       )}
-      <TelegramChip />
-      <button onClick={() => setSound(!settings.sound)} className={btn} aria-pressed={settings.sound}
-        title={settings.sound ? 'Som de alarme ligado' : 'Som de alarme desligado'}>
-        {settings.sound ? <Volume2 size={14} className="text-hud" aria-hidden /> : <VolumeX size={14} className="text-muted" aria-hidden />}
-        <span className="hidden lg:inline">{settings.sound ? 'Som' : 'Mudo'}</span>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu"
+        className="inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-ink2 hover:bg-raised">
+        {settings.sound || settings.notify ? <Bell size={15} className="text-hud" aria-hidden /> : <BellOff size={15} aria-hidden />}
+        <span className="hidden sm:inline">Alertas</span>
       </button>
-      {notifyPermission !== 'unsupported' && (
-        <button onClick={() => void setNotify(!settings.notify)} className={btn} aria-pressed={settings.notify}
-          title={notifyPermission === 'denied' ? 'Notificações bloqueadas no navegador' : settings.notify ? 'Notificações do navegador ligadas' : 'Ativar notificações do navegador'}>
-          {settings.notify ? <Bell size={14} className="text-hud" aria-hidden /> : <BellOff size={14} className="text-muted" aria-hidden />}
-          <span className="hidden lg:inline">Avisos</span>
-        </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-line bg-surface p-2 shadow-xl">
+          <p className="px-2 pb-2 pt-1 text-xs text-muted">Como o painel avisa quando surge um incidente grave.</p>
+          <MenuToggle on={settings.sound} onClick={() => setSound(!settings.sound)}
+            icon={settings.sound ? <Volume2 size={16} className="text-hud" aria-hidden /> : <VolumeX size={16} className="text-muted" aria-hidden />}
+            title="Som de alarme" detail="Toca uma sirene em incidente crítico e um aviso em incidente alto." />
+          {notifyPermission !== 'unsupported' && (
+            <MenuToggle on={settings.notify} onClick={() => void setNotify(!settings.notify)}
+              icon={settings.notify ? <Bell size={16} className="text-hud" aria-hidden /> : <BellOff size={16} className="text-muted" aria-hidden />}
+              title="Notificações do navegador"
+              detail={notifyPermission === 'denied' ? 'Bloqueadas nas configurações do navegador.' : 'Aparecem mesmo com outra aba aberta.'} />
+          )}
+          <TelegramRow />
+          <button role="menuitem" onClick={() => { setOpen(false); testAlarm() }}
+            className="mt-1 flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm hover:bg-raised">
+            <Siren size={16} className="text-critical" aria-hidden />
+            <span>
+              <span className="block font-medium">Testar alarme</span>
+              <span className="block text-xs text-muted">Mostra como fica um alerta crítico.</span>
+            </span>
+          </button>
+        </div>
       )}
-      <button onClick={testAlarm} className={btn} title="Disparar um alarme de teste">
-        <Siren size={14} className="text-critical" aria-hidden />
-        <span className="hidden lg:inline">Testar</span>
-      </button>
     </div>
+  )
+}
+
+function MenuToggle({ on, onClick, icon, title, detail }: { on: boolean; onClick: () => void; icon: ReactNode; title: string; detail: string }) {
+  return (
+    <button role="menuitemcheckbox" aria-checked={on} onClick={onClick} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm hover:bg-raised">
+      {icon}
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">{title}</span>
+        <span className="block text-xs text-muted">{detail}</span>
+      </span>
+      <span className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--primary)]' : 'bg-raised border border-line'}`} aria-hidden>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+      </span>
+    </button>
   )
 }
 
@@ -431,7 +560,7 @@ export function AlertControls() {
  * Off-screen channel: the backend pushes incidents to Telegram even with this tab closed.
  * Shows whether it is configured; clicking sends a test message.
  */
-function TelegramChip() {
+function TelegramRow() {
   const q = useQuery({
     queryKey: ['telegram'],
     queryFn: () => api<{ enabled: boolean; minSeverity: string }>('/notifications/telegram'),
@@ -440,24 +569,23 @@ function TelegramChip() {
   const [result, setResult] = useState<string | null>(null)
   const test = useMutation({
     mutationFn: () => api<{ result: 'SENT' | 'FAILED' | 'DISABLED' }>('/notifications/telegram/test', { method: 'POST' }),
-    onSuccess: (r) => setResult(r.result === 'SENT' ? 'Teste enviado' : r.result === 'FAILED' ? 'Falha no envio' : 'Não configurado'),
-    onError: () => setResult('Falha no envio'),
+    onSuccess: (r) => setResult(r.result === 'SENT' ? 'Mensagem de teste enviada.' : r.result === 'FAILED' ? 'Falha no envio.' : 'Não configurado.'),
+    onError: () => setResult('Falha no envio.'),
     onSettled: () => window.setTimeout(() => setResult(null), 5_000),
   })
   if (!q.data) return null
   const on = q.data.enabled
   return (
-    <button
-      onClick={() => on && test.mutate()}
-      disabled={test.isPending}
-      className={`flex items-center gap-1.5 rounded-sm border px-2 py-1 text-xs hover:bg-raised ${on ? 'border-line' : 'border-warning'}`}
-      title={on
-        ? `Telegram ativo: incidentes ${q.data.minSeverity} ou acima chegam no celular mesmo com o painel fechado. Clique para enviar um teste.`
-        : 'Telegram não configurado: com o painel fechado ninguém é avisado. Preencha SOC_TELEGRAM_BOT_TOKEN e SOC_TELEGRAM_CHAT_ID no .env.'}
-    >
-      <Send size={14} className={on ? 'text-good' : 'text-warning'} aria-hidden />
-      <span className={on ? 'hidden lg:inline' : 'font-semibold text-warning'}>
-        {result ?? (test.isPending ? 'Enviando…' : on ? 'Telegram' : 'Telegram off')}
+    <button role="menuitem" onClick={() => on && test.mutate()} disabled={test.isPending || !on}
+      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm hover:bg-raised disabled:cursor-default">
+      <Send size={16} className={on ? 'text-good' : 'text-warning'} aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">Telegram {on ? 'ligado' : 'desligado'}</span>
+        <span className="block text-xs text-muted">
+          {result ?? (test.isPending ? 'Enviando…' : on
+            ? `Incidentes a partir de ${q.data.minSeverity} chegam no celular. Clique para testar.`
+            : 'Configure SOC_TELEGRAM_BOT_TOKEN e SOC_TELEGRAM_CHAT_ID no .env.')}
+        </span>
       </span>
     </button>
   )
@@ -475,15 +603,15 @@ export function EmergencyBanner() {
   const one = waiting.length === 1
   return (
     <div className="alarm-stripes border-b-2 border-critical" role="alert">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm lg:px-8">
         <AlertOctagon size={18} className="alarm-blink shrink-0 text-critical" aria-hidden />
-        <span className="hud-label font-bold text-critical">Emergência</span>
+        <span className="font-bold text-critical">Emergência</span>
         <span className="font-semibold">
           {one ? '1 incidente crítico aguardando resposta' : `${waiting.length} incidentes críticos aguardando resposta`}
         </span>
         <span className="hidden min-w-0 flex-1 truncate text-ink2 md:block">{waiting[0].title}</span>
-        <Link to={one ? `/incidents/${waiting[0].id}` : '/incidents'} className="rounded-sm bg-critical px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110">
-          Responder
+        <Link to={one ? `/incidents/${waiting[0].id}` : '/incidents'} className="rounded-md bg-critical px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110">
+          Ver agora
         </Link>
       </div>
     </div>

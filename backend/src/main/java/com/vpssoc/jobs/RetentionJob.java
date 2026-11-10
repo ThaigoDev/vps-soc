@@ -20,10 +20,13 @@ public class RetentionJob {
 
     private final EventRepository events;
     private final HostMetricRepository metrics;
+    private final com.vpssoc.repository.ServiceSampleRepository serviceSamples;
     private final SocProperties.Retention cfg;
     private final Clock clock;
 
-    public RetentionJob(EventRepository events, HostMetricRepository metrics, SocProperties props, Clock clock) {
+    public RetentionJob(EventRepository events, HostMetricRepository metrics, SocProperties props, Clock clock,
+                        com.vpssoc.repository.ServiceSampleRepository serviceSamples) {
+        this.serviceSamples = serviceSamples;
         this.events = events;
         this.metrics = metrics;
         this.cfg = props.retention();
@@ -35,6 +38,7 @@ public class RetentionJob {
     public void purge() {
         int e = events.deleteOlderThan(clock.instant().minus(Duration.ofDays(cfg.eventDays())));
         int m = metrics.deleteOlderThan(clock.instant().minus(Duration.ofDays(cfg.metricDays())));
+        m += serviceSamples.deleteOlderThan(clock.instant().minus(Duration.ofDays(cfg.metricDays())));
         log.info("Retention: removed {} events and {} metric samples", e, m);
     }
 }

@@ -84,7 +84,7 @@ public class DashboardService {
                 case AUTH_SUCCESS -> 1;
                 case PRIVILEGE -> 2;
                 case NETWORK -> 3;
-                case AGENT, RESPONSE -> 4;
+                case AGENT, RESPONSE, SERVICE -> 4;
                 case FILE, PROCESS -> 5;
             };
             b[idx] += ((Number) row[2]).longValue();

@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, Ban, BookOpen, ExternalLink, Fingerprint, Globe, ListChecks, ShieldCheck, Target, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Ban, Boxes, BookOpen, ExternalLink, Fingerprint, Globe, ListChecks, ShieldCheck, Target, Zap } from 'lucide-react'
 import { api, type Incident, type IncidentDetailData, type IncidentStatus, type IpProfile, type ResponseAction } from '../api'
 import { Card, Empty, ErrorNote, RiskBar, SeverityBadge, StatusBadge, eventTypeLabel, fmtTime, timeAgo } from '../components/ui'
 import { ActionCard, CommandBlock } from '../components/ResponseUi'
+import { ruleLabel } from '../components/SocMetrics'
 
 const actions: { status: IncidentStatus; label: string }[] = [
   { status: 'ACKNOWLEDGED', label: 'Assumir análise' },
@@ -44,18 +45,24 @@ export default function IncidentDetail() {
           <SeverityBadge severity={i.severity} />
           <StatusBadge status={i.status} />
           {i.containedAt && (
-            <span className="inline-flex items-center gap-1 rounded-sm border border-good px-1.5 py-0.5 font-mono text-[11px] font-semibold uppercase text-ink">
+            <span className="inline-flex items-center gap-1 rounded-full border border-good px-2 py-0.5 text-xs font-medium text-ink">
               <ShieldCheck size={12} className="text-good" aria-hidden /> Contido {timeAgo(i.containedAt)}
             </span>
           )}
-          <span className="hud-label text-[10px] text-muted">#{i.id} · {i.ruleId}</span>
+          <span className="text-xs text-muted">#{i.id} · {ruleLabel[i.ruleId] ?? i.ruleId}</span>
+          {i.service && (
+            <Link to={`/services/${encodeURIComponent(i.hostId)}/${encodeURIComponent(i.service)}`}
+              className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs text-ink hover:bg-raised">
+              <Boxes size={12} className="text-hud" aria-hidden /> aplicação: {i.service}
+            </Link>
+          )}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{i.title}</h1>
         {ex.summary && <p className="mt-2 max-w-4xl text-[15px] leading-relaxed text-ink">{ex.summary}</p>}
 
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
           <Field label="Risco"><RiskBar value={i.riskScore} /></Field>
-          <Field label="Host">{i.hostId}</Field>
+          <Field label="Servidor">{i.hostId}</Field>
           <Field label="IP de origem"><span className="font-mono text-xs">{i.sourceIp ?? '—'}</span></Field>
           <Field label="Usuário"><span className="font-mono text-xs">{i.username ?? '—'}</span></Field>
           <Field label="Primeiro evento">{fmtTime(i.firstSeen)}</Field>
@@ -67,7 +74,7 @@ export default function IncidentDetail() {
             <p className="hud-label mb-1.5 text-[10px] text-muted">MITRE ATT&amp;CK</p>
             <div className="flex flex-wrap gap-2">
               {i.techniques.map((t) => (
-                <a key={t.id} href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-sm border border-line bg-raised px-2 py-1 text-xs hover:border-hud">
+                <a key={t.id} href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line bg-raised px-2 py-1 text-xs hover:border-hud">
                   <span className="font-mono font-semibold">{t.id}</span> {t.name}
                   <ExternalLink size={11} className="text-muted" aria-hidden />
                 </a>
@@ -83,13 +90,16 @@ export default function IncidentDetail() {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Nota (opcional): o que você verificou ou fez"
-            className="min-w-[220px] flex-1 rounded-sm border border-line bg-page px-3 py-1.5 text-sm outline-none focus:border-hud"
+            aria-label="Nota"
+            className="min-w-[220px] flex-1 rounded-lg border border-line bg-page px-3 py-1.5 text-sm outline-none focus:border-[var(--hud)]"
           />
           {actions
             .filter((a) => a.status !== i.status && (a.status === 'OPEN') !== active)
-            .map((a) => (
+            .map((a, n) => (
               <button key={a.status} onClick={() => change.mutate(a.status)} disabled={change.isPending}
-                className="rounded-sm border border-line px-3 py-1.5 text-sm hover:bg-raised disabled:opacity-50">
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${n === 0
+                  ? 'bg-[var(--primary)] text-white hover:brightness-110'
+                  : 'border border-line hover:bg-raised'}`}>
                 {a.label}
               </button>
             ))}
@@ -100,7 +110,7 @@ export default function IncidentDetail() {
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="space-y-4 xl:col-span-2">
           {ex.impact && (
-            <Card title={<><AlertTriangle size={13} aria-hidden /> Por que isso importa</>}>
+            <Card title={<><AlertTriangle size={15} className="text-muted" aria-hidden /> Por que isso importa</>}>
               <p className="text-sm leading-relaxed text-ink">{ex.impact}</p>
               {ex.riskFactors.length > 0 && (
                 <ul className="mt-3 space-y-1 border-t border-line pt-3 text-sm text-ink2">
@@ -115,11 +125,11 @@ export default function IncidentDetail() {
           <ResponsePanel i={i} acts={acts} text={ex.response} ip={ip} />
 
           {ex.recommendations.length > 0 && (
-            <Card title={<><ListChecks size={13} aria-hidden /> Próximos passos</>}>
+            <Card title={<><ListChecks size={15} className="text-muted" aria-hidden /> Próximos passos</>} description="O que fazer, em ordem. Os comandos têm botão de copiar.">
               <ol className="space-y-4">
                 {ex.recommendations.map((s, n) => (
                   <li key={s.title} className="flex gap-3">
-                    <span className="tnum flex h-6 w-6 shrink-0 items-center justify-center border border-hud font-mono text-xs font-bold text-hud">{n + 1}</span>
+                    <span className="tnum flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-raised text-xs font-semibold text-hud">{n + 1}</span>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold">{s.title}</p>
                       {s.detail && <p className="mt-0.5 text-sm text-ink2">{s.detail}</p>}
@@ -129,12 +139,12 @@ export default function IncidentDetail() {
                 ))}
               </ol>
               <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
-                Rode os comandos no terminal da VPS (hPanel → Terminal ou SSH). Nada aqui é executado sozinho: as ações automáticas aparecem em “Resposta”.
+                Rode os comandos no terminal da VPS (hPanel → Terminal ou SSH). Nada aqui é executado sozinho: as ações automáticas aparecem em “Resposta automática”.
               </p>
             </Card>
           )}
 
-          <Card title={`Linha do tempo (${events.length} eventos)`}>
+          <Card title={`Linha do tempo (${events.length} eventos)`} description="Os eventos que formaram este incidente, do mais antigo ao mais novo.">
             {events.length === 0 && <Empty>Sem eventos vinculados: é um incidente de estado do host (saúde ou postura).</Empty>}
             <ol className="relative ml-2 border-l border-line">
               {events.map((e) => (
@@ -156,7 +166,7 @@ export default function IncidentDetail() {
 
         <div className="space-y-4">
           {ex.evidence.length > 0 && (
-            <Card title={<><Fingerprint size={13} aria-hidden /> Evidências</>}>
+            <Card title={<><Fingerprint size={15} className="text-muted" aria-hidden /> Evidências</>}>
               <dl className="space-y-2.5 text-sm">
                 {ex.evidence.map((f) => (
                   <div key={f.label}>
@@ -169,7 +179,7 @@ export default function IncidentDetail() {
           )}
           {ip && <IpCard ip={ip} hostId={i.hostId} incidentId={i.id} />}
           {ex.falsePositive && (
-            <Card title={<><BookOpen size={13} aria-hidden /> Pode ser falso positivo?</>}>
+            <Card title={<><BookOpen size={15} className="text-muted" aria-hidden /> Pode ser falso positivo?</>}>
               <p className="text-sm leading-relaxed text-ink2">{ex.falsePositive}</p>
             </Card>
           )}
@@ -181,7 +191,7 @@ export default function IncidentDetail() {
 
 function ResponsePanel({ i, acts, text, ip }: { i: Incident; acts: ResponseAction[]; text?: string; ip?: IpProfile }) {
   return (
-    <Card title={<><Zap size={13} aria-hidden /> Resposta do SOC</>}>
+    <Card title={<><Zap size={15} className="text-muted" aria-hidden /> Resposta do SOC</>} description="O que o SOC já fez sozinho ou propõe fazer.">
       {i.containmentNote && (
         <p className="mb-3 flex gap-2 border-l-2 border-good pl-3 text-sm text-ink">
           <ShieldCheck size={16} className="mt-0.5 shrink-0 text-good" aria-hidden />
@@ -208,7 +218,7 @@ function IpCard({ ip, hostId, incidentId }: { ip: IpProfile; hostId: string; inc
   })
   const canBlock = !ip.protectedBy && !ip.blockedUntil
   return (
-    <Card title={<><Globe size={13} aria-hidden /> Perfil do IP</>}>
+    <Card title={<><Globe size={15} className="text-muted" aria-hidden /> Perfil do IP</>}>
       <p className="font-mono text-lg font-semibold">{ip.ip}</p>
       <p className="text-xs text-ink2">{ip.kindLabel}{ip.trustedSource ? ' · origem confiável' : ''}</p>
       {ip.blockedUntil && (
@@ -232,7 +242,7 @@ function IpCard({ ip, hostId, incidentId }: { ip: IpProfile; hostId: string; inc
           <p className="hud-label mb-1 text-[10px] text-muted"><Target size={11} className="mr-1 inline" aria-hidden />Usuários mais tentados</p>
           <div className="flex flex-wrap gap-1">
             {ip.topUsernames.map((u) => (
-              <span key={u.username} className="rounded-sm border border-line bg-raised px-1.5 py-0.5 font-mono text-[11px]">{u.username || '(vazio)'} · {u.attempts}</span>
+              <span key={u.username} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11px]">{u.username || '(vazio)'} · {u.attempts}</span>
             ))}
           </div>
         </div>
@@ -244,14 +254,14 @@ function IpCard({ ip, hostId, incidentId }: { ip: IpProfile; hostId: string; inc
         </a>
         {canBlock && (
           <span className="ml-auto flex items-center gap-1">
-            <select value={hours} onChange={(e) => setHours(Number(e.target.value))} className="rounded-sm border border-line bg-page px-1 py-1 text-xs" aria-label="Duração do bloqueio">
+            <select value={hours} onChange={(e) => setHours(Number(e.target.value))} className="rounded-md border border-line bg-page px-1 py-1 text-xs" aria-label="Duração do bloqueio">
               <option value={1}>1 h</option>
               <option value={24}>24 h</option>
               <option value={168}>7 dias</option>
               <option value={720}>30 dias</option>
             </select>
             <button onClick={() => block.mutate()} disabled={block.isPending}
-              className="hud-label flex items-center gap-1 rounded-sm border border-critical px-2 py-1 text-[10px] font-semibold text-ink hover:bg-raised disabled:opacity-50">
+              className="hud-label flex items-center gap-1 rounded-md border border-critical px-2 py-1 text-[10px] font-semibold text-ink hover:bg-raised disabled:opacity-50">
               <Ban size={12} aria-hidden /> Bloquear IP
             </button>
           </span>

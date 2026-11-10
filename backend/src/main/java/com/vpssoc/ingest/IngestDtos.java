@@ -40,7 +40,9 @@ public final class IngestDtos {
             Metrics metrics,
             @Size(max = 2000) List<Map<String, Object>> openPorts,
             Map<String, Object> posture,
-            Map<String, Object> response) {
+            Map<String, Object> response,
+            @Size(max = 500) List<Map<String, Object>> services,
+            Map<String, Object> pm2) {
     }
 
     public record Metrics(
@@ -63,6 +65,11 @@ public final class IngestDtos {
     }
 
     public record IngestResult(int accepted, int skipped) {
+    }
+
+    public record InventoryUpload(@NotBlank @Pattern(regexp = HOST_ID_PATTERN) String hostId, @NotBlank String service,
+                                  String pm2Home, String lockfile, @NotBlank String hash,
+                                  @NotNull @Size(max = 10000) List<Map<String, Object>> packages) {
     }
 
     public record ActionPoll(@NotBlank @Pattern(regexp = HOST_ID_PATTERN) String hostId) {

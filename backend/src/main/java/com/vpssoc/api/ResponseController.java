@@ -88,6 +88,7 @@ public class ResponseController {
         out.put("killProcess", r.effective(r.killProcess()));
         out.put("diskCleanup", r.effective(r.diskCleanup()));
         out.put("restartService", r.effective(r.restartService()));
+        out.put("restartPm2", r.effective(r.restartPm2()));
         out.put("bruteForceBlockHours", r.bruteForceBlockTtl().toHours());
         out.put("compromiseBlockHours", r.compromiseBlockTtl().toHours());
         out.put("allowlist", r.allowlist() == null ? List.of() : r.allowlist());
