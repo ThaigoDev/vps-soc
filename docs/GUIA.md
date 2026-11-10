@@ -12,10 +12,9 @@ como roda e como usar o painel.
 5. [Tour pelo painel](#5-tour-pelo-painel)
 6. [Rotina de uso](#6-rotina-de-uso)
 7. [Conectando uma VPS de verdade](#7-conectando-uma-vps-de-verdade)
-8. [Usando em mais de um PC](#8-usando-em-mais-de-um-pc)
-9. [Problemas comuns](#9-problemas-comuns)
-10. [Onde fica cada coisa no código](#10-onde-fica-cada-coisa-no-código)
-11. [Glossário](#11-glossário)
+8. [Problemas comuns](#8-problemas-comuns)
+9. [Onde fica cada coisa no código](#9-onde-fica-cada-coisa-no-código)
+10. [Glossário](#10-glossário)
 
 ---
 
@@ -248,110 +247,7 @@ SOC_ALLOW_INSECURE_HTTP=true
 
 **4. Confira:** em até 30 s o servidor aparece em **Servidores** como *Online*.
 
-## 8. Usando em mais de um PC
-
-Dá para rodar o SOC no PC que estiver ligado (por exemplo, um Linux e um Windows) sem editar
-nada à mão. O agente da VPS só manda dados para **um** endereço por vez. Então o script
-`soc-up` faz três coisas sempre que você liga o SOC num PC:
-
-1. descobre o IP do Tailscale daquele PC;
-2. sobe o painel nesse IP;
-3. entra na VPS por SSH e aponta o agente para esse PC.
-
-### Configuração (uma vez em cada PC)
-
-**1. Tailscale ligado** no PC, na mesma conta da VPS.
-
-**2. Projeto clonado** e na mesma branch nos dois PCs.
-
-**3. O mesmo `.env` nos dois PCs.** Copie o arquivo de um para o outro (pendrive, Drive…).
-Os tokens precisam ser idênticos, senão o agente e o seu login quebram. Use a mesma
-`SOC_PORT` nos dois (ex.: `8088`) e preencha:
-
-```
-SOC_VPS_SSH=root@srv731680
-```
-
-(`srv731680` é o nome da VPS no Tailscale; confira com `tailscale status`.)
-
-**4. Entrar na VPS por SSH sem senha.** Crie uma chave neste PC (aperte Enter em todas as
-perguntas):
-
-```bash
-ssh-keygen -t ed25519
-```
-
-Envie a chave para a VPS. No Linux:
-
-```bash
-ssh-copy-id root@srv731680
-```
-
-No Windows (PowerShell):
-
-```bash
-type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@srv731680 "cat >> ~/.ssh/authorized_keys"
-```
-
-Teste: `ssh root@srv731680 hostname` tem que responder sem pedir senha.
-
-> O próprio SOC vai abrir um incidente “authorized_keys alterado”. É esperado: foi você.
-> Abra o incidente e marque como **Falso positivo**.
-
-### Uso (toda vez)
-
-No **Linux**, dentro da pasta do projeto:
-
-```bash
-./scripts/soc-up.sh
-```
-
-No **Windows**: duplo clique em `scripts\soc-up.cmd`.
-
-No fim aparece o endereço do painel, por exemplo `http://100.105.113.27:8088`. Pronto: o
-agente já está mandando os dados para esse PC.
-
-Para desligar o SOC num PC (os dados ficam guardados):
-
-```bash
-docker compose down
-```
-
-### O histórico fica separado
-
-Cada PC tem o seu próprio banco de dados. Os incidentes vistos enquanto o Windows estava
-ligado ficam no Windows, e os do Linux ficam no Linux. Se o agente ficar sem nenhum SOC
-ligado, ele guarda os eventos por um tempo e manda quando um SOC voltar.
-
-Para levar o histórico de um PC para o outro, exporte no PC antigo:
-
-```bash
-docker compose exec -T db pg_dump -U vpssoc -d vpssoc -Fc -f /tmp/soc.dump
-```
-
-```bash
-docker compose cp db:/tmp/soc.dump soc-backup.dump
-```
-
-Copie o `soc-backup.dump` para a pasta do projeto no outro PC e importe:
-
-```bash
-docker compose cp soc-backup.dump db:/tmp/soc.dump
-```
-
-```bash
-docker compose exec -T db pg_restore -U vpssoc -d vpssoc --clean --if-exists /tmp/soc.dump
-```
-
-```bash
-docker compose restart backend
-```
-
-Se você quer **um histórico só, sempre**, o caminho é deixar o SOC num lugar que fica ligado
-24 h (uma segunda VPS barata ou um Raspberry Pi com Tailscale) e só abrir o painel pelo
-navegador nos PCs.
-
-## 9. Problemas comuns
+## 8. Problemas comuns
 
 **O painel abre, mas está tudo zerado e “Servidores online: 0 de 0”**
 
@@ -398,7 +294,7 @@ do projeto. Entre nela primeiro (`cd vps-soc`).
 **Não ouço o alarme:** o navegador só libera som depois de um clique. Clique em
 **Ativar som** no topo, ou em **Alertas → Testar alarme**.
 
-## 10. Onde fica cada coisa no código
+## 9. Onde fica cada coisa no código
 
 ```
 vps-soc/
@@ -418,7 +314,7 @@ vps-soc/
 │   └── src/
 │       ├── pages/       uma tela por arquivo (Overview, Incidents, Hosts…)
 │       └── components/  peças reutilizadas (menu lateral, alertas, badges…)
-├── scripts/          soc-up (liga o SOC no PC atual) e simulate-attack.mjs (ataque de demonstração)
+├── scripts/          simulate-attack.mjs (ataque de demonstração)
 └── docs/             esta documentação
 ```
 
@@ -431,7 +327,7 @@ painel.
 `npm install` e `npm run dev`. O painel abre em http://localhost:5173 e recarrega sozinho a
 cada mudança.
 
-## 11. Glossário
+## 10. Glossário
 
 | Termo | Significado |
 |---|---|

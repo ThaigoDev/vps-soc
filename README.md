@@ -18,10 +18,6 @@ detecta, correlaciona e abre incidentes (com MITRE ATT&CK), e um dashboard React
 O backend roda **fora** da VPS monitorada. Se a VPS for comprometida, o atacante não consegue
 apagar o histórico, e o próprio silêncio do agente vira um incidente (`AGENT_OFFLINE`).
 
-> **Usa o SOC em mais de um PC?** `./scripts/soc-up.sh` (Linux) ou duplo clique em
-> `scripts\soc-up.cmd` (Windows) sobe o painel e aponta o agente da VPS para o PC atual.
-> Veja [Usando em mais de um PC](docs/GUIA.md#8-usando-em-mais-de-um-pc).
->
 > **Novo por aqui?** Leia o [Guia do VPS-SOC](docs/GUIA.md): explica em linguagem simples o
 > que o projeto faz, como rodar, um tour pelo painel e os problemas mais comuns.
 
