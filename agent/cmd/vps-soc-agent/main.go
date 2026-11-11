@@ -152,6 +152,7 @@ func main() {
 				"pm2":                      pm2Status,
 				"posture":                  p,
 				"response":                 map[string]any{"enabled": executor.Enabled, "autoBlock": guard.Enabled},
+				"publicIps":                collector.PublicAddresses(),
 			}
 			hctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			if err := snd.SendHeartbeat(hctx, hb); err != nil {

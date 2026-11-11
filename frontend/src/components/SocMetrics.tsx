@@ -14,11 +14,11 @@ export const ruleLabel: Record<string, string> = {
   SSH_LOGIN_NEW_SOURCE: 'Login de IP novo',
   SUDO_FAILURE: 'Falha de sudo',
   NEW_LISTENING_PORT: 'Porta nova',
-  FIM_AUTHORIZED_KEYS: 'authorized_keys',
-  FIM_SSHD_CONFIG: 'sshd_config',
-  FIM_SUDOERS: 'sudoers',
-  FIM_CRON: 'cron',
-  FIM_ACCOUNTS: 'contas (passwd)',
+  FIM_AUTHORIZED_KEYS: 'Chave SSH adicionada',
+  FIM_SSHD_CONFIG: 'Configuração do SSH alterada',
+  FIM_SUDOERS: 'Permissões de sudo alteradas',
+  FIM_CRON: 'Tarefa agendada (cron) alterada',
+  FIM_ACCOUNTS: 'Contas de usuário alteradas',
   SUSPICIOUS_PROCESS: 'Processo suspeito',
   WEB_SHELL: 'Web shell',
   AGENT_OFFLINE: 'Agente offline',
@@ -26,7 +26,7 @@ export const ruleLabel: Record<string, string> = {
   SERVICE_FAILED: 'Serviço em falha',
   SECURITY_UPDATES: 'Patches pendentes',
   REBOOT_REQUIRED: 'Reboot pendente',
-  SSH_WEAK_CONFIG: 'SSH fraco',
+  SSH_WEAK_CONFIG: 'SSH com configuração fraca',
   SERVICE_DOWN: 'App PM2 caiu',
   SERVICE_CRASH_LOOP: 'App PM2 em crash loop',
   SERVICE_HIGH_MEMORY: 'App PM2 com memória alta',
@@ -112,7 +112,7 @@ function Small({ label, value, hint, tone }: { label: string; value: string | nu
     <div title={hint}>
       <p className="text-xs text-muted">{label}</p>
       <p className="tnum text-lg font-semibold" style={tone ? { color: tone } : undefined}>{value}</p>
-      {hint && <p className="text-[11px] leading-tight text-muted">{hint}</p>}
+      {hint && <p className="text-xs leading-tight text-muted">{hint}</p>}
     </div>
   )
 }

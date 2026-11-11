@@ -87,12 +87,12 @@ public final class ApiDtos {
                            HostStatus status, Instant firstSeen, Instant lastSeen, int heartbeatIntervalSeconds,
                            Map<String, Object> metrics, List<Map<String, Object>> openPorts,
                            Map<String, Object> posture, Map<String, Object> response,
-                           Map<String, Object> pm2, int services) {
+                           Map<String, Object> pm2, int services, String publicIp, String manualIp) {
         public static HostView of(Host h) {
             return new HostView(h.getId(), h.getHostname(), h.getOs(), h.getAgentVersion(), h.getLastIp(),
                     h.getStatus(), h.getFirstSeen(), h.getLastSeen(), h.getHeartbeatIntervalSeconds(),
                     h.getMetrics(), h.getOpenPorts(), h.getPosture(), h.getResponse(),
-                    h.getPm2(), h.getServices() == null ? 0 : h.getServices().size());
+                    h.getPm2(), h.getServices() == null ? 0 : h.getServices().size(), h.getPublicIp(), h.getManualIp());
         }
     }
 

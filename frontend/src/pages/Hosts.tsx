@@ -1,26 +1,140 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { api, type Host, type MetricPoint } from '../api'
-import { Server } from 'lucide-react'
+import { api, type AttackMap, type Host, type MapServer, type MetricPoint, type ServiceView } from '../api'
+import { Globe2, MapPin, Server, Workflow } from 'lucide-react'
+import { InfraFlow } from '../components/InfraFlow'
+import { WorldMap, countryName } from '../components/WorldMap'
 import { Card, Empty, ErrorNote, PageHeader, chartTooltip, fmtBytes, fmtTime, timeAgo } from '../components/ui'
 import { CheckList, postureChecks } from '../components/SocMetrics'
 
 export default function Hosts() {
   const q = useQuery({ queryKey: ['hosts'], queryFn: () => api<Host[]>('/hosts'), refetchInterval: 10_000 })
+  const map = useAttackMap(24)
+  const services = useQuery({ queryKey: ['services'], queryFn: () => api<ServiceView[]>('/services'), refetchInterval: 10_000 })
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (!hash || !q.data) return
+    document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [hash, q.data])
+
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader icon={Server} title="Servidores"
-        description="Cada VPS com o agente instalado. Mostra se ela está respondendo, quanto de CPU, memória e disco usa, quem está logado, quais portas estão abertas e se a configuração de segurança está boa." />
+        description="Onde ficam seus servidores, de onde vêm os ataques e o caminho que um acesso faz da internet até as aplicações. Logo abaixo, a ficha completa de cada servidor." />
       {q.error && <ErrorNote error={q.error} />}
       {q.data && q.data.length === 0 && (
         <Card><Empty>Nenhum servidor conectado ainda. Instale o agente na VPS (veja Ajuda → Como conectar uma VPS).</Empty></Card>
       )}
-      <div className="space-y-5">{q.data?.map((h) => <HostCard key={h.id} host={h} />)}</div>
+      {map.data && q.data && q.data.length > 0 && <MapCard data={map.data} hosts={q.data} />}
+      {q.data?.map((h) => (
+        <div key={h.id} id={h.id} className="scroll-mt-20 space-y-5">
+          <Card title={<><Workflow size={16} className="text-muted" aria-hidden /> Caminho da internet até as aplicações · {h.id}</>}
+            description="Cada caixa é uma etapa por onde um acesso passa. Verde funciona, amarelo pede atenção, vermelho é onde está o problema.">
+            <InfraFlow host={h} services={(services.data ?? []).filter((x) => x.hostId === h.id)} attackers={attackSummary(map.data)} />
+          </Card>
+          <HostCard host={h} geo={map.data?.servers.find((x) => x.hostId === h.id)} />
+        </div>
+      ))}
     </div>
   )
 }
 
-function HostCard({ host: h }: { host: Host }) {
+export function useAttackMap(hours: number) {
+  return useQuery({ queryKey: ['map', hours], queryFn: () => api<AttackMap>(`/dashboard/map?hours=${hours}`), refetchInterval: 30_000 })
+}
+
+function attackSummary(m?: AttackMap) {
+  if (!m) return undefined
+  return {
+    total: m.attackers.filter((a) => a.failures > 0).length,
+    breached: m.attackers.filter((a) => a.failures > 0 && a.successes > 0).length,
+    blocked: m.attackers.filter((a) => a.blocked).length,
+  }
+}
+
+function MapCard({ data, hosts }: { data: AttackMap; hosts: Host[] }) {
+  const navigate = useNavigate()
+  const unknown = data.servers.filter((s) => !s.geo)
+  const totalFailures = data.attackers.reduce((n, a) => n + a.failures, 0)
+  const located = data.attackers.filter((a) => a.geo).length
+  return (
+    <Card title={<><Globe2 size={16} className="text-muted" aria-hidden /> Mapa · seus servidores e a origem dos ataques (24h)</>}
+      description={`${data.attackers.length} endereço(s) tentaram entrar nos seus servidores, somando ${totalFailures.toLocaleString('pt-BR')} tentativas. As linhas mostram de onde vieram.`}>
+      <div id="mapa" className="grid scroll-mt-20 gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div>
+          <WorldMap data={data} onSelectServer={(id) => navigate(`/hosts#${encodeURIComponent(id)}`)} />
+          {!data.geoEnabled && <p className="mt-3 text-xs text-warning">A localização por IP está desligada (SOC_GEOIP_ENABLED=false): o mapa mostra só o que já estava salvo.</p>}
+          {data.geoEnabled && data.pendingLookups > 0 && <p className="mt-3 text-xs text-muted">Localizando {data.pendingLookups} endereço(s)… o mapa se completa sozinho em alguns segundos.</p>}
+          {data.geoEnabled && located === 0 && data.attackers.length > 0 && data.pendingLookups === 0 && (
+            <p className="mt-3 text-xs text-muted">Não foi possível localizar os atacantes. O servidor do SOC precisa de acesso à internet para consultar a localização dos IPs.</p>
+          )}
+        </div>
+        <div className="space-y-5">
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">De onde vêm os ataques</h3>
+            {data.countries.length === 0 && <p className="text-sm text-muted">Nenhum ataque localizado nas últimas 24h.</p>}
+            <ul className="space-y-2.5">
+              {data.countries.slice(0, 8).map((c) => {
+                const max = data.countries[0].failures || 1
+                return (
+                  <li key={c.code}>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="w-7 rounded bg-raised py-0.5 text-center font-mono text-[11px] font-semibold text-ink2">{c.code}</span>
+                        {countryName(c.code, c.name)}
+                      </span>
+                      <span className="tnum text-xs text-ink2">{c.failures.toLocaleString('pt-BR')}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-raised">
+                      <div className="h-full rounded-full" style={{ width: `${(c.failures / max) * 100}%`, background: c.successes ? 'var(--critical)' : 'var(--s2)' }} />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          {unknown.map((s) => <LocationForm key={s.hostId} server={s} host={hosts.find((h) => h.id === s.hostId)} />)}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/** Shown when the SOC does not know where a server is (old agent, or connected only through Tailscale). */
+function LocationForm({ server, host }: { server: MapServer; host?: Host }) {
+  const qc = useQueryClient()
+  const [ip, setIp] = useState(host?.manualIp ?? '')
+  const save = useMutation({
+    mutationFn: () => api<MapServer>(`/hosts/${encodeURIComponent(server.hostId)}/location`, { method: 'PUT', body: JSON.stringify({ ip }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['map'] })
+      qc.invalidateQueries({ queryKey: ['hosts'] })
+    },
+  })
+  const waiting = server.publicIp && !server.geo
+  return (
+    <div className="rounded-lg border border-warning p-3">
+      <p className="text-sm font-semibold">Onde fica {server.hostId}?</p>
+      <p className="mt-0.5 text-xs text-ink2">
+        {waiting
+          ? `Localizando ${server.ip}…`
+          : 'O SOC só conhece o endereço privado deste servidor. Informe o IP público (o que aparece no painel da hospedagem) para ele aparecer no mapa.'}
+      </p>
+      {!waiting && (
+        <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); save.mutate() }}>
+          <input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="ex.: 82.25.79.73" aria-label={`IP público de ${server.hostId}`}
+            className="min-w-0 flex-1 rounded-lg border border-line bg-page px-2.5 py-1.5 font-mono text-xs" />
+          <button disabled={save.isPending || !ip.trim()} className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Salvar</button>
+        </form>
+      )}
+      {save.error && <ErrorNote error={save.error} />}
+    </div>
+  )
+}
+
+function HostCard({ host: h, geo }: { host: Host; geo?: MapServer }) {
   const online = h.status === 'ONLINE'
   const m = h.metrics ?? {}
   return (
@@ -34,6 +148,7 @@ function HostCard({ host: h }: { host: Host }) {
           </span>
         </span>
       }
+      description={<HostWhere geo={geo} />}
       action={<span className="text-xs text-muted">{h.os} · agente {h.agentVersion}</span>}
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
@@ -116,7 +231,7 @@ function HostCard({ host: h }: { host: Host }) {
                   <tr key={`${p.proto}-${p.address}-${p.port}`} className="border-t border-line">
                     <td className="tnum px-4 py-1.5 font-semibold">{p.port}/{p.proto}</td>
                     <td className="py-1.5">
-                      {p.address} {exposed && <span className="ml-1 rounded bg-raised px-1 font-sans text-[10px] text-ink2">pública</span>}
+                      {p.address} {exposed && <span className="ml-1 rounded bg-raised px-1 font-sans text-xs text-ink2">pública</span>}
                     </td>
                     <td className="py-1.5">{p.process ?? '-'} {p.pid ? <span className="text-muted">({p.pid})</span> : null}</td>
                     <td className="max-w-xs truncate py-1.5 text-ink2">{p.exe ?? '-'}</td>
@@ -131,6 +246,17 @@ function HostCard({ host: h }: { host: Host }) {
         <Empty>Sem dados de portas.</Empty>
       )}
     </Card>
+  )
+}
+
+function HostWhere({ geo }: { geo?: MapServer }) {
+  if (!geo?.geo) return <>Localização desconhecida{geo?.ip ? ` · ${geo.ip}` : ''}</>
+  const g = geo.geo
+  return (
+    <span className="inline-flex items-center gap-1">
+      <MapPin size={12} aria-hidden /> {[g.city, countryName(g.countryCode, g.country)].filter(Boolean).join(', ')}
+      {g.org ? ` · ${g.org}` : ''} · IP {geo.ip}{geo.ipSource === 'MANUAL' ? ' (definido à mão)' : ''}
+    </span>
   )
 }
 
@@ -186,7 +312,7 @@ function Figure({ label, value, hint }: { label: string; value: string | number;
     <div title={hint}>
       <p className="text-xs text-ink2">{label}</p>
       <p className="tnum mt-1 text-xl font-semibold">{value}</p>
-      {hint && <p className="text-[10px] leading-tight text-muted">{hint}</p>}
+      {hint && <p className="text-xs leading-tight text-muted">{hint}</p>}
     </div>
   )
 }

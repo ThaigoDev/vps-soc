@@ -416,7 +416,7 @@ function AlarmModal({ incident: i, queued, onClose, onSilenceAll }: {
           {i.techniques.length > 0 && (
             <p className="flex flex-wrap gap-1">
               {i.techniques.map((t) => (
-                <span key={t.id} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11px] text-ink2" title={t.name}>{t.id}</span>
+                <span key={t.id} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-xs text-ink2" title={t.name}>{t.id}</span>
               ))}
             </p>
           )}
@@ -602,7 +602,7 @@ export function EmergencyBanner() {
   if (waiting.length === 0) return null
   const one = waiting.length === 1
   return (
-    <div className="alarm-stripes border-b-2 border-critical" role="alert">
+    <div className="no-print alarm-stripes border-b-2 border-critical" role="alert">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm lg:px-8">
         <AlertOctagon size={18} className="alarm-blink shrink-0 text-critical" aria-hidden />
         <span className="font-bold text-critical">Emergência</span>

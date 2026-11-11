@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, BarChart3, Boxes, HelpCircle, LayoutDashboard, Server, ShieldCheck, Siren } from 'lucide-react'
+import { Activity, BarChart3, Boxes, FileText, HelpCircle, LayoutDashboard, Server, ShieldCheck, Siren } from 'lucide-react'
 import { Card, PageHeader, SeverityBadge } from '../components/ui'
 import { CommandBlock } from '../components/ResponseUi'
 
@@ -8,10 +8,11 @@ const pages: { to: string; Icon: typeof Siren; title: string; text: string }[] =
   { to: '/', Icon: LayoutDashboard, title: 'Visão geral', text: 'Resumo de tudo. Diz se está tudo bem e, se não estiver, o que precisa de você.' },
   { to: '/incidents', Icon: Siren, title: 'Incidentes', text: 'Problemas detectados que precisam de análise. Cada um explica o que aconteceu e o que fazer.' },
   { to: '/events', Icon: Activity, title: 'Eventos', text: 'O registro bruto de tudo que o agente viu. Útil para investigar um IP ou usuário.' },
-  { to: '/hosts', Icon: Server, title: 'Servidores', text: 'Cada VPS monitorada: CPU, memória, disco, portas abertas e checklist de segurança.' },
+  { to: '/hosts', Icon: Server, title: 'Servidores', text: 'Mapa-múndi com servidores e origem dos ataques, o caminho da internet até as aplicações e a ficha de cada VPS.' },
   { to: '/services', Icon: Boxes, title: 'Aplicações', text: 'Apps Node.js rodando no PM2: se estão no ar e se têm dependências vulneráveis.' },
   { to: '/response', Icon: ShieldCheck, title: 'Resposta automática', text: 'Ações de defesa (bloquear IP, matar processo). Aqui você aprova as que esperam por você.' },
   { to: '/reports', Icon: BarChart3, title: 'Relatórios', text: 'Métricas do SOC ao longo do tempo e o mapa MITRE ATT&CK.' },
+  { to: '/client-report', Icon: FileText, title: 'Relatório do cliente', text: 'Resumo de uma página em linguagem simples, para imprimir ou salvar em PDF e mandar a quem não usa o painel.' },
 ]
 
 const glossary: { term: string; text: ReactNode }[] = [
@@ -29,6 +30,7 @@ const glossary: { term: string; text: ReactNode }[] = [
   { term: 'MTTD, MTTA, MTTC, MTTR', text: 'Tempos médios para Detectar, Assumir (Acknowledge), Conter e Resolver um incidente. São as métricas clássicas para medir um SOC: quanto menor, melhor.' },
   { term: 'PM2', text: 'Gerenciador que mantém aplicações Node.js rodando na VPS e as reinicia se caírem.' },
   { term: 'Porta pública', text: 'Porta aberta em 0.0.0.0, ou seja, acessível por qualquer um na internet. Banco de dados e painéis administrativos não deveriam estar assim.' },
+  { term: 'Geolocalização de IP', text: 'Descobrir o país e a cidade aproximados de um endereço IP. É assim que o mapa sabe onde fica o servidor e de onde vêm os ataques.' },
   { term: 'Tailscale', text: 'VPN que liga a VPS ao computador onde o SOC roda, sem expor o painel na internet. Os IPs dela começam com 100.' },
 ]
 

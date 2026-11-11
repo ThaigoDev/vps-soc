@@ -40,7 +40,7 @@ export default function ServiceDetail() {
 
   return (
     <div className="space-y-4">
-      <Link to="/services" className="hud-label inline-flex items-center gap-1 text-[11px] text-ink2 hover:text-hud">
+      <Link to="/services" className="hud-label inline-flex items-center gap-1 text-xs text-ink2 hover:text-hud">
         <ArrowLeft size={13} aria-hidden /> Aplicações
       </Link>
 
@@ -48,9 +48,9 @@ export default function ServiceDetail() {
         <div className="flex flex-wrap items-center gap-2">
           <HealthBadge health={s.health} />
           <Pm2Status status={a.status} />
-          <span className="hud-label text-[10px] text-muted">pm2 id {a.pmId} · {s.hostId}</span>
+          <span className="hud-label text-xs text-muted">pm2 id {a.pmId} · {s.hostId}</span>
           <button onClick={() => { if (window.confirm(`Reiniciar ${a.name} com pm2 restart?`)) restart.mutate() }} disabled={restart.isPending || !s.hostOnline}
-            className="hud-label ml-auto flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:bg-raised disabled:opacity-50">
+            className="hud-label ml-auto flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-xs text-ink hover:bg-raised disabled:opacity-50">
             <RotateCcw size={13} aria-hidden /> Reiniciar (pm2 restart)
           </button>
         </div>
@@ -132,7 +132,7 @@ export default function ServiceDetail() {
                     <span className="text-xs font-bold text-critical">só HTTP</span>
                   )}
                   {site.certificate?.issuer && <span className="text-xs text-muted">{site.certificate.issuer}</span>}
-                  <span className="ml-auto font-mono text-[11px] text-muted">{site.configFile}</span>
+                  <span className="ml-auto font-mono text-xs text-muted">{site.configFile}</span>
                 </li>
               )
             })}
@@ -142,7 +142,7 @@ export default function ServiceDetail() {
 
       <Card title="Uso nas últimas horas"
         action={
-          <div className="flex gap-1 font-mono text-[11px]">
+          <div className="flex gap-1 font-mono text-xs">
             {[6, 24, 72].map((h) => (
               <button key={h} onClick={() => setHours(h)} className={`rounded-md border px-2 py-0.5 ${h === hours ? 'border-hud text-ink' : 'border-transparent text-muted'}`}>{h}h</button>
             ))}
@@ -189,7 +189,7 @@ export default function ServiceDetail() {
                   {tail.length > 0 && (
                     <details className="mt-1">
                       <summary className="cursor-pointer text-xs text-hud">Log de erro no momento ({tail.length} linhas)</summary>
-                      <pre className="mt-1 max-h-48 overflow-auto border border-line bg-page p-2 font-mono text-[11px] text-ink2">{tail.join('\n')}</pre>
+                      <pre className="mt-1 max-h-48 overflow-auto border border-line bg-page p-2 font-mono text-xs text-ink2">{tail.join('\n')}</pre>
                     </details>
                   )}
                 </li>
@@ -205,7 +205,7 @@ export default function ServiceDetail() {
 function MiniChart({ data, dataKey, label }: { data: Record<string, unknown>[]; dataKey: string; label: string }) {
   return (
     <div>
-      <p className="hud-label mb-1 text-[10px] text-muted">{label}</p>
+      <p className="hud-label mb-1 text-xs text-muted">{label}</p>
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
@@ -225,7 +225,7 @@ function MiniChart({ data, dataKey, label }: { data: Record<string, unknown>[]; 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="hud-label text-[10px] text-muted">{label}</dt>
+      <dt className="hud-label text-xs text-muted">{label}</dt>
       <dd className="mt-0.5 break-words">{children}</dd>
     </div>
   )
@@ -234,7 +234,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="hud-label text-[10px] text-muted">{label}</dt>
+      <dt className="hud-label text-xs text-muted">{label}</dt>
       <dd className="tnum mt-0.5 font-mono text-xl font-bold">{value}</dd>
     </div>
   )
@@ -272,7 +272,7 @@ function Vulnerabilities({ hostId, name, vulns, inventory, lockfile, cwd }: {
     <Card title={<><Bug size={15} className="text-muted" aria-hidden /> Vulnerabilidades nas dependências</>}
       action={
         <button onClick={() => scan.mutate()} disabled={scan.isPending || !inventory}
-          className="hud-label flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-[10px] text-ink2 hover:bg-raised disabled:opacity-50">
+          className="hud-label flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-xs text-ink2 hover:bg-raised disabled:opacity-50">
           <RefreshCw size={11} className={scan.isPending ? 'animate-spin' : ''} aria-hidden /> Verificar agora
         </button>
       }>
@@ -295,7 +295,7 @@ function Vulnerabilities({ hostId, name, vulns, inventory, lockfile, cwd }: {
         <div className="-mx-4 overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
             <thead>
-              <tr className="hud-label text-left text-[10px] text-muted">
+              <tr className="hud-label text-left text-xs text-muted">
                 <th className="px-4 pb-2 font-normal">Severidade</th>
                 <th className="pb-2 font-normal">Pacote</th>
                 <th className="pb-2 font-normal">Falha</th>
@@ -309,7 +309,7 @@ function Vulnerabilities({ hostId, name, vulns, inventory, lockfile, cwd }: {
                   <td className="px-4 py-2"><VulnBadge level={v.severity} /></td>
                   <td className="py-2 font-mono text-xs">
                     {v.pkg}@{v.version}
-                    {v.dev && <span className="ml-1 rounded-md bg-raised px-1 font-sans text-[10px] text-muted">dev</span>}
+                    {v.dev && <span className="ml-1 rounded-md bg-raised px-1 font-sans text-xs text-muted">dev</span>}
                   </td>
                   <td className="max-w-md py-2 text-xs text-ink2">{v.summary ?? '—'}</td>
                   <td className="py-2 font-mono text-xs">{v.fixedVersion ? <span className="text-good">{v.fixedVersion}</span> : <span className="text-muted">sem correção</span>}</td>

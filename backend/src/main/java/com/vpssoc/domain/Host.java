@@ -18,6 +18,10 @@ public class Host {
     private String os;
     private String agentVersion;
     private String lastIp;
+    /** Internet address configured on the server (reported by the agent). */
+    private String publicIp;
+    /** Address typed in the dashboard; wins over the reported one for the map. */
+    private String manualIp;
 
     @Enumerated(EnumType.STRING)
     private HostStatus status = HostStatus.ONLINE;
@@ -64,6 +68,24 @@ public class Host {
     public void setAgentVersion(String agentVersion) { this.agentVersion = agentVersion; }
     public String getLastIp() { return lastIp; }
     public void setLastIp(String lastIp) { this.lastIp = lastIp; }
+    public String getPublicIp() { return publicIp; }
+    public void setPublicIp(String publicIp) { this.publicIp = publicIp; }
+    public String getManualIp() { return manualIp; }
+    public void setManualIp(String manualIp) { this.manualIp = manualIp; }
+
+    /** The address used to place the server on the map, and where it came from. */
+    public String locationIp() {
+        if (manualIp != null) return manualIp;
+        if (publicIp != null) return publicIp;
+        return lastIp;
+    }
+
+    public String locationSource() {
+        if (manualIp != null) return "MANUAL";
+        if (publicIp != null) return "AGENT";
+        return "CONNECTION";
+    }
+
     public HostStatus getStatus() { return status; }
     public void setStatus(HostStatus status) { this.status = status; }
     public int getHeartbeatIntervalSeconds() { return heartbeatIntervalSeconds; }

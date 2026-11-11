@@ -15,6 +15,7 @@ import Services from './pages/Services'
 import ServiceDetail from './pages/ServiceDetail'
 import Reports from './pages/Reports'
 import Help from './pages/Help'
+import ClientReport from './pages/ClientReport'
 
 export default function App() {
   const [authed, setAuthed] = useState(() => !!getToken())
@@ -39,7 +40,7 @@ export default function App() {
     <AlertProvider>
       <Shell onLogout={logout}>
         <EmergencyBanner />
-        <main className="w-full max-w-[1400px] px-4 py-6 lg:px-8">
+        <main className="w-full max-w-[1400px] px-4 py-6 lg:px-8 print:max-w-none print:p-0">
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/incidents" element={<Incidents />} />
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/services/:hostId/:name" element={<ServiceDetail />} />
             <Route path="/response" element={<ResponsePage />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/client-report" element={<ClientReport />} />
             <Route path="/help" element={<Help />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -71,7 +71,7 @@ export function MitreMatrix({ incidents }: { incidents: Incident[] }) {
             const lit = tac.techniques.some((x) => hits.has(x.id))
             return (
               <div key={tac.name} className="flex flex-col gap-1.5">
-                <div className={`hud-label border-b-2 pb-1 text-[10px] font-semibold ${lit ? 'border-critical text-ink' : 'border-line text-muted'}`}>
+                <div className={`hud-label border-b-2 pb-1 text-xs font-semibold ${lit ? 'border-critical text-ink' : 'border-line text-muted'}`}>
                   {tac.name}
                 </div>
                 {tac.techniques.map((t) => {
@@ -87,7 +87,7 @@ export function MitreMatrix({ incidents }: { incidents: Incident[] }) {
                       className={`block border px-2 py-1.5 text-xs transition-colors hover:border-hud ${h ? 'text-ink' : 'border-line text-muted'}`}
                       style={h ? { borderColor: s!.color, background: `color-mix(in srgb, ${s!.color} 16%, transparent)` } : undefined}
                     >
-                      <span className="flex items-center justify-between gap-1 font-mono text-[10px]">
+                      <span className="flex items-center justify-between gap-1 font-mono text-xs">
                         {t.id}
                         {h && s && (
                           <span className="flex items-center gap-0.5 font-semibold">
