@@ -36,7 +36,7 @@ export default function IncidentDetail() {
 
   return (
     <div className="space-y-4">
-      <Link to="/incidents" className="hud-label inline-flex items-center gap-1 text-[11px] text-ink2 hover:text-hud">
+      <Link to="/incidents" className="hud-label inline-flex items-center gap-1 text-xs text-ink2 hover:text-hud">
         <ArrowLeft size={13} aria-hidden /> Incidentes
       </Link>
 
@@ -71,7 +71,7 @@ export default function IncidentDetail() {
 
         {i.techniques.length > 0 && (
           <div className="mt-4">
-            <p className="hud-label mb-1.5 text-[10px] text-muted">MITRE ATT&amp;CK</p>
+            <p className="hud-label mb-1.5 text-xs text-muted">MITRE ATT&amp;CK</p>
             <div className="flex flex-wrap gap-2">
               {i.techniques.map((t) => (
                 <a key={t.id} href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line bg-raised px-2 py-1 text-xs hover:border-hud">
@@ -83,7 +83,7 @@ export default function IncidentDetail() {
           </div>
         )}
 
-        {i.resolutionNote && <p className="mt-4 text-sm text-ink2"><span className="hud-label text-[10px] text-muted">Nota · </span>{i.resolutionNote}</p>}
+        {i.resolutionNote && <p className="mt-4 text-sm text-ink2"><span className="hud-label text-xs text-muted">Nota · </span>{i.resolutionNote}</p>}
 
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
           <input
@@ -170,7 +170,7 @@ export default function IncidentDetail() {
               <dl className="space-y-2.5 text-sm">
                 {ex.evidence.map((f) => (
                   <div key={f.label}>
-                    <dt className="hud-label text-[10px] text-muted">{f.label}</dt>
+                    <dt className="hud-label text-xs text-muted">{f.label}</dt>
                     <dd className="mt-0.5 break-words">{f.value}</dd>
                   </div>
                 ))}
@@ -239,17 +239,17 @@ function IpCard({ ip, hostId, incidentId }: { ip: IpProfile; hostId: string; inc
       {ip.firstSeen && <p className="mt-3 text-xs text-muted">Visto pela 1ª vez {fmtTime(ip.firstSeen)} · último {timeAgo(ip.lastSeen!)}</p>}
       {ip.topUsernames.length > 0 && (
         <div className="mt-3">
-          <p className="hud-label mb-1 text-[10px] text-muted"><Target size={11} className="mr-1 inline" aria-hidden />Usuários mais tentados</p>
+          <p className="hud-label mb-1 text-xs text-muted"><Target size={11} className="mr-1 inline" aria-hidden />Usuários mais tentados</p>
           <div className="flex flex-wrap gap-1">
             {ip.topUsernames.map((u) => (
-              <span key={u.username} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-[11px]">{u.username || '(vazio)'} · {u.attempts}</span>
+              <span key={u.username} className="rounded-md border border-line bg-raised px-1.5 py-0.5 font-mono text-xs">{u.username || '(vazio)'} · {u.attempts}</span>
             ))}
           </div>
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-        <Link to={`/events?ip=${encodeURIComponent(ip.ip)}`} className="hud-label text-[10px] text-hud hover:underline">Todos os eventos</Link>
-        <a href={`https://www.abuseipdb.com/check/${encodeURIComponent(ip.ip)}`} target="_blank" rel="noreferrer" className="hud-label inline-flex items-center gap-1 text-[10px] text-hud hover:underline">
+        <Link to={`/events?ip=${encodeURIComponent(ip.ip)}`} className="hud-label text-xs text-hud hover:underline">Todos os eventos</Link>
+        <a href={`https://www.abuseipdb.com/check/${encodeURIComponent(ip.ip)}`} target="_blank" rel="noreferrer" className="hud-label inline-flex items-center gap-1 text-xs text-hud hover:underline">
           AbuseIPDB <ExternalLink size={10} aria-hidden />
         </a>
         {canBlock && (
@@ -261,7 +261,7 @@ function IpCard({ ip, hostId, incidentId }: { ip: IpProfile; hostId: string; inc
               <option value={720}>30 dias</option>
             </select>
             <button onClick={() => block.mutate()} disabled={block.isPending}
-              className="hud-label flex items-center gap-1 rounded-md border border-critical px-2 py-1 text-[10px] font-semibold text-ink hover:bg-raised disabled:opacity-50">
+              className="hud-label flex items-center gap-1 rounded-md border border-critical px-2 py-1 text-xs font-semibold text-ink hover:bg-raised disabled:opacity-50">
               <Ban size={12} aria-hidden /> Bloquear IP
             </button>
           </span>
@@ -275,7 +275,7 @@ function IpCard({ ip, hostId, incidentId }: { ip: IpProfile; hostId: string; inc
 function Stat({ label, value, alert }: { label: string; value: number; alert?: boolean }) {
   return (
     <div>
-      <dt className="hud-label text-[10px] text-muted">{label}</dt>
+      <dt className="hud-label text-xs text-muted">{label}</dt>
       <dd className={`tnum font-mono text-xl font-bold ${alert ? 'text-critical' : ''}`}>{value.toLocaleString('pt-BR')}</dd>
     </div>
   )
@@ -284,7 +284,7 @@ function Stat({ label, value, alert }: { label: string; value: number; alert?: b
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="hud-label text-[10px] text-muted">{label}</dt>
+      <dt className="hud-label text-xs text-muted">{label}</dt>
       <dd className="mt-0.5">{children}</dd>
     </div>
   )

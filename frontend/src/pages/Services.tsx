@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Boxes } from 'lucide-react'
+import { Boxes, Workflow } from 'lucide-react'
+import { InfraFlow } from '../components/InfraFlow'
+import { useAttackMap } from './Hosts'
 import { api, type Host, type ServiceView } from '../api'
 import { Card, Empty, ErrorNote, PageHeader, SeverityBadge, timeAgo } from '../components/ui'
 import { HealthBadge, ScoreBadge, VulnCounts, fmtMb, fmtUptime, healthOrder } from '../components/ServiceUi'
@@ -18,6 +20,12 @@ export default function Services() {
     healthOrder[a.health] - healthOrder[b.health] || a.hostId.localeCompare(b.hostId) || a.pm2.pmId - b.pm2.pmId)
   const count = (h: ServiceView['health']) => list.filter((s) => s.health === h).length
   const multiHost = new Set(list.map((s) => s.hostId)).size > 1
+  const map = useAttackMap(24)
+  const attack = map.data ? {
+    total: map.data.attackers.filter((a) => a.failures > 0).length,
+    breached: map.data.attackers.filter((a) => a.failures > 0 && a.successes > 0).length,
+    blocked: map.data.attackers.filter((a) => a.blocked).length,
+  } : undefined
   const pm2Problems = (hosts.data ?? []).filter((h) => h.pm2?.error || (h.pm2 && (h.pm2.daemons?.length ?? 0) === 0))
 
   return (
@@ -31,6 +39,13 @@ export default function Services() {
         <Tile label="Fora do ar" value={count('DOWN')} tone={count('DOWN') ? 'var(--critical)' : undefined} />
         <Tile label="Reinícios na última hora" value={list.reduce((n, s) => n + s.restartsLastHour, 0)} />
       </div>
+
+      {(hosts.data ?? []).filter((h) => list.some((x) => x.hostId === h.id)).map((h) => (
+        <Card key={h.id} title={<><Workflow size={16} className="text-muted" aria-hidden /> Onde está o problema · {h.id}</>}
+          description="O caminho de um acesso: internet, firewall, servidor, domínios/portas e aplicações. A caixa vermelha é onde algo quebrou.">
+          <InfraFlow host={h} services={list.filter((x) => x.hostId === h.id)} attackers={attack} />
+        </Card>
+      ))}
 
       {pm2Problems.map((h) => (
         <p key={h.id} className="rounded-xl border border-warning bg-surface px-4 py-3 text-sm">

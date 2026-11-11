@@ -14,8 +14,8 @@
   --surface: #121821;
   --raised: #1a222d;
   --ink: #e8edf3;
-  --ink-2: #b0bccb;
-  --muted: #8592a3;
+  --ink-2: #c3ccd8;
+  --muted: #99a5b4;
   --line: #243040;
   --axis: #33414f;
   --hud: #5b9dff;
@@ -38,8 +38,8 @@
   --surface: #ffffff;
   --raised: #eef1f5;
   --ink: #111827;
-  --ink-2: #445063;
-  --muted: #6b7686;
+  --ink-2: #3b4658;
+  --muted: #5b6678;
   --line: #e1e6ed;
   --axis: #c3cad4;
   --hud: #2563eb;
@@ -63,7 +63,7 @@ html {
 body {
   background-color: var(--page);
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -78,11 +78,11 @@ body {
 
 /*
  * Small labels. Used to be uppercase monospace "HUD" text; now plain, readable labels.
- * Defined after the utilities on purpose, so it also normalizes text-[10px] on labels.
+ * Defined after the utilities on purpose, so it also normalizes text-xs on labels.
  */
 .hud-label {
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -118,4 +118,38 @@ body {
 
 select, input {
   color: var(--ink);
+}
+
+/* Printing (the client report): light colors, no app chrome. */
+@media print {
+  :root, :root[data-theme='light'] {
+    color-scheme: light;
+    --page: #ffffff;
+    --surface: #ffffff;
+    --raised: #f1f3f6;
+    --ink: #111827;
+    --ink-2: #374151;
+    --muted: #4b5563;
+    --line: #d9dee5;
+    --axis: #c3cad4;
+    --hud: #1d4ed8;
+  }
+  body { font-size: 12.5px; }
+  .no-print { display: none !important; }
+  .print-break { break-before: page; }
+  section { break-inside: avoid; }
+  @page { margin: 14mm; }
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -24; }
+}
+.flow-dash { animation: dash-flow 1.2s linear infinite; }
+@keyframes ping-ring {
+  0% { r: 6; opacity: 0.7; }
+  100% { r: 18; opacity: 0; }
+}
+.ping-ring { animation: ping-ring 2s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .flow-dash, .ping-ring { animation: none; }
 }

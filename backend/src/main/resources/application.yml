@@ -72,3 +72,7 @@ soc:
     compromise-block-ttl: ${SOC_RESPONSE_COMPROMISE_TTL:P7D}
     # IPs/CIDRs never blocked (your home/office IP), on top of loopback/private/Tailscale/link-local
     allowlist: ${SOC_RESPONSE_ALLOWLIST:}
+  # Where servers and attacking IPs are on the world map. Only the IP is sent to the service.
+  geoip:
+    enabled: ${SOC_GEOIP_ENABLED:true}
+    url: ${SOC_GEOIP_URL:https://ipwho.is/{ip}}

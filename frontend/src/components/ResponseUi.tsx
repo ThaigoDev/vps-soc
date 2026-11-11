@@ -67,9 +67,9 @@ export function ActionCard({ a, showIncident = false }: { a: ResponseAction; sho
         <Icon size={15} className="text-hud" aria-hidden />
         <span className="font-semibold">{a.label}</span>
         <ActionStatusBadge status={a.status} />
-        <span className="hud-label text-[10px] text-muted">#{a.id} · {who} · {a.hostId}</span>
+        <span className="hud-label text-xs text-muted">#{a.id} · {who} · {a.hostId}</span>
         {showIncident && a.incidentId && (
-          <Link to={`/incidents/${a.incidentId}`} className="hud-label text-[10px] text-hud hover:underline">incidente #{a.incidentId}</Link>
+          <Link to={`/incidents/${a.incidentId}`} className="hud-label text-xs text-hud hover:underline">incidente #{a.incidentId}</Link>
         )}
         <span className="ml-auto text-xs text-muted" title={fmtTime(a.completedAt ?? a.createdAt)}>{timeAgo(a.completedAt ?? a.createdAt)}</span>
       </div>
@@ -78,11 +78,11 @@ export function ActionCard({ a, showIncident = false }: { a: ResponseAction; sho
       {a.status === 'PROPOSED' && (
         <div className="mt-2 flex gap-2">
           <button onClick={() => { play('click'); approve.mutate(a.id) }} disabled={busy}
-            className="hud-label flex items-center gap-1 rounded-md border border-good px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-raised disabled:opacity-50">
+            className="hud-label flex items-center gap-1 rounded-md border border-good px-2.5 py-1 text-xs font-semibold text-ink hover:bg-raised disabled:opacity-50">
             <ShieldCheck size={13} aria-hidden /> Aprovar e executar
           </button>
           <button onClick={() => dismiss.mutate(a.id)} disabled={busy}
-            className="hud-label flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-[11px] text-ink2 hover:bg-raised disabled:opacity-50">
+            className="hud-label flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-xs text-ink2 hover:bg-raised disabled:opacity-50">
             <X size={13} aria-hidden /> Descartar
           </button>
         </div>

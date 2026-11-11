@@ -164,8 +164,32 @@ investigar. Clique em uma linha para ver os detalhes técnicos.
 
 ### Servidores
 
-Uma ficha por VPS: CPU, memória, disco, rede, quem está logado, portas abertas e um
+**Mapa-múndi.** Mostra onde fica cada servidor (ponto verde, ou vermelho se estiver offline)
+e de onde vieram os ataques das últimas 24 horas. Cada ponto laranja é um endereço que
+tentou entrar: quanto maior, mais tentativas. As linhas ligam o atacante ao servidor, e um
+ponto vermelho é um atacante que **conseguiu** fazer login. Ao lado, os países que mais
+atacaram. Passe o mouse em um ponto para ver o IP, a cidade e o provedor.
+
+![Mapa de servidores e ataques](img/mapa.png)
+
+**Caminho da internet até as aplicações.** Um diagrama de fluxo, da esquerda para a direita,
+com o caminho que um acesso faz: *Internet → Firewall → Servidor → Entradas (domínios e portas
+abertas) → Aplicações*. Cada caixa tem a cor do seu estado (verde funciona, amarelo atenção,
+vermelho problema), e as linhas até uma caixa quebrada ficam vermelhas e tracejadas. Acima do
+desenho vem a lista do que está errado, em português. Clique numa caixa para abrir os detalhes.
+O mesmo diagrama aparece na página **Aplicações**.
+
+![Fluxo da infraestrutura](img/fluxo.png)
+
+**Ficha do servidor.** CPU, memória, disco, rede, quem está logado, portas abertas e um
 **checklist de segurança** (SSH só com chave, sem login root por senha, atualizações em dia…).
+
+> **Como o SOC sabe onde fica o servidor e os atacantes?** Ele consulta a localização
+> aproximada de cada IP público num serviço gratuito (ipwho.is), enviando só o endereço IP,
+> e guarda a resposta para não perguntar de novo. O agente a partir desta versão informa o
+> IP público da VPS sozinho. Com um agente antigo, o mapa mostra um campo “Onde fica…?” para
+> você digitar o IP público (o que aparece no painel da hospedagem). Para desligar a
+> consulta, use `SOC_GEOIP_ENABLED=false` no `.env`.
 
 ### Aplicações
 
@@ -190,6 +214,23 @@ com falhas conhecidas (consultadas na base pública OSV.dev).
 Métricas para apresentar resultados: tempos médios de resposta (MTTD, MTTA, MTTC, MTTR),
 quanto foi contido sozinho, alarmes falsos, gráfico de eventos por tipo e o
 **mapa MITRE ATT&CK** com as técnicas vistas nos incidentes abertos.
+
+### Relatório do cliente
+
+Uma página pronta para mandar a um **cliente, professor ou gestor** que não usa o painel. Em
+linguagem simples, ela resume o período escolhido (7 ou 30 dias):
+
+- a situação atual e uma frase de resumo;
+- quantas tentativas de invasão houve, quantos alertas e quantos foram contidos sozinhos;
+- o mapa e a tabela de países de onde vieram os ataques;
+- os principais tipos de ameaça;
+- a saúde de servidores e aplicações;
+- **o que recomendamos fazer**, em ordem.
+
+Clique em **Imprimir / salvar PDF**: o relatório sai em fundo branco, sem o menu, pronto para
+anexar num e-mail. Também dá para chegar nele pelo botão em **Relatórios**.
+
+![Relatório do cliente](img/relatorio-cliente.png)
 
 ### Ajuda e glossário
 

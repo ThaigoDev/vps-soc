@@ -42,7 +42,8 @@ public final class IngestDtos {
             Map<String, Object> posture,
             Map<String, Object> response,
             @Size(max = 500) List<Map<String, Object>> services,
-            Map<String, Object> pm2) {
+            Map<String, Object> pm2,
+            @Size(max = 32) List<String> publicIps) {
     }
 
     public record Metrics(

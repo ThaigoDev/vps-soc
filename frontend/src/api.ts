@@ -122,6 +122,10 @@ export interface Host {
   response?: { enabled?: boolean; autoBlock?: boolean }
   pm2?: { daemons?: string[]; error?: string }
   services?: number
+  /** Internet address reported by the agent. */
+  publicIp?: string
+  /** Address typed in the dashboard to place the server on the map. */
+  manualIp?: string
 }
 
 export interface Posture {
@@ -422,4 +426,51 @@ export interface ServiceDetail {
   incidents: IncidentRef[]
   vulnerabilities: Vulnerability[]
   inventory?: { packages: number; devPackages: number; lockfile?: string; receivedAt: string; scannedAt?: string; scanError?: string }
+}
+
+// ---- world map -----------------------------------------------------------------------------
+
+export interface GeoInfo {
+  country?: string
+  countryCode?: string
+  region?: string
+  city?: string
+  lat: number
+  lon: number
+  org?: string
+}
+
+export interface MapServer {
+  hostId: string
+  status: 'ONLINE' | 'OFFLINE'
+  ip?: string
+  ipSource: 'MANUAL' | 'AGENT' | 'CONNECTION'
+  publicIp: boolean
+  geo?: GeoInfo
+}
+
+export interface MapAttacker {
+  ip: string
+  failures: number
+  successes: number
+  usernames: number
+  blocked: boolean
+  geo?: GeoInfo
+}
+
+export interface MapCountry {
+  code: string
+  name?: string
+  ips: number
+  failures: number
+  successes: number
+}
+
+export interface AttackMap {
+  hours: number
+  geoEnabled: boolean
+  pendingLookups: number
+  servers: MapServer[]
+  attackers: MapAttacker[]
+  countries: MapCountry[]
 }

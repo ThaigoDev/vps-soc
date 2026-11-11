@@ -115,6 +115,12 @@ public class IngestService {
             host.setServices(hb.services());
         }
         host.setPm2(hb.pm2());
+        if (hb.publicIps() != null) {
+            host.setPublicIp(hb.publicIps().stream()
+                    .filter(ip -> ip != null && com.vpssoc.response.IpClassifier.kind(ip) == com.vpssoc.response.IpClassifier.Kind.PUBLIC)
+                    .sorted(java.util.Comparator.comparing((String ip) -> ip.contains(":"))) // IPv4 first
+                    .findFirst().orElse(null));
+        }
 
         var m = hb.metrics();
         if (m != null) {

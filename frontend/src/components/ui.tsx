@@ -75,7 +75,7 @@ export function Segmented<T extends string | number>({ value, onChange, options,
 export function Hint({ text }: { text: string }) {
   return (
     <span tabIndex={0} title={text} aria-label={text}
-      className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-line text-[10px] font-semibold text-muted hover:text-ink">
+      className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-line text-xs font-semibold text-muted hover:text-ink">
       ?
     </span>
   )

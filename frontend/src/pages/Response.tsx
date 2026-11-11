@@ -99,7 +99,7 @@ function Blocks() {
         <div className="-mx-4 overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">
             <thead>
-              <tr className="hud-label text-left text-[10px] text-muted">
+              <tr className="hud-label text-left text-xs text-muted">
                 <th className="px-4 pb-2 font-medium">IP</th>
                 <th className="pb-2 font-medium">Por</th>
                 <th className="pb-2 font-medium">Expira</th>
@@ -112,7 +112,7 @@ function Blocks() {
                 <tr key={b.id} className="border-t border-line">
                   <td className="px-4 py-1.5 font-mono text-xs">
                     <Link to={`/events?ip=${encodeURIComponent(b.ip)}`} className="hover:text-hud">{b.ip}</Link>
-                    <span className="block text-[10px] text-muted">{b.hostId}</span>
+                    <span className="block text-xs text-muted">{b.hostId}</span>
                   </td>
                   <td className="py-1.5 text-xs">{b.origin === 'AGENT' ? 'Agente' : 'SOC'}</td>
                   <td className="tnum py-1.5 text-xs" title={fmtTime(b.expiresAt)}>{fmtTime(b.expiresAt)}</td>
@@ -121,7 +121,7 @@ function Blocks() {
                   </td>
                   <td className="px-4 py-1.5 text-right">
                     <button onClick={() => unblock.mutate(b.id)} disabled={unblock.isPending}
-                      className="hud-label inline-flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-[10px] text-ink2 hover:bg-raised disabled:opacity-50">
+                      className="hud-label inline-flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-xs text-ink2 hover:bg-raised disabled:opacity-50">
                       <Unlock size={11} aria-hidden /> Desbloquear
                     </button>
                   </td>

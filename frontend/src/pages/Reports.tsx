@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { BarChart3 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { BarChart3, FileText } from 'lucide-react'
 import { api, qs, type Incident, type Page, type TimelineBucket } from '../api'
 import { MitreMatrix } from '../components/MitreMatrix'
 import { IncidentTrend, SocKpis, TopDetections } from '../components/SocMetrics'
@@ -26,7 +27,8 @@ export default function Reports() {
   return (
     <div className="space-y-5">
       <PageHeader icon={BarChart3} title="Relatórios"
-        description="Números para acompanhar o trabalho do SOC ao longo do tempo: quanto tempo leva para responder, o que mais dispara e como os ataques se distribuem. Bom para apresentar resultados." />
+        description="Números para acompanhar o trabalho do SOC ao longo do tempo: quanto tempo leva para responder, o que mais dispara e como os ataques se distribuem."
+        actions={<Link to="/client-report" className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm font-semibold text-white hover:brightness-110"><FileText size={15} aria-hidden /> Gerar relatório para o cliente</Link>} />
       <SocKpis />
       <Timeline />
       <div className="grid gap-5 xl:grid-cols-3">

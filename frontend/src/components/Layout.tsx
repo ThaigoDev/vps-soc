@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useIsFetching, useQuery } from '@tanstack/react-query'
 import {
-  Activity, BarChart3, Boxes, HelpCircle, LayoutDashboard, LogOut, Menu, Moon, Server, Shield, ShieldCheck, Siren, Sun, X,
+  Activity, BarChart3, Boxes, FileText, HelpCircle, LayoutDashboard, LogOut, Menu, Moon, Server, Shield, ShieldCheck, Siren, Sun, X,
 } from 'lucide-react'
 import { api, type Host, type ServiceView, type Summary } from '../api'
 import { AlertMenu, useAlertSettings } from './Alerts'
@@ -36,7 +36,7 @@ export function Shell({ children, onLogout }: { children: ReactNode; onLogout: (
   return (
     <div className="min-h-screen lg:flex">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-line bg-surface lg:flex lg:flex-col">
+      <aside className="no-print sticky top-0 hidden h-screen w-60 shrink-0 border-r border-line bg-surface lg:flex lg:flex-col">
         <Sidebar onLogout={onLogout} />
       </aside>
 
@@ -54,7 +54,7 @@ export function Shell({ children, onLogout }: { children: ReactNode; onLogout: (
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-page/90 px-4 py-2.5 backdrop-blur">
+        <header className="no-print sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-page/90 px-4 py-2.5 backdrop-blur">
           <button onClick={() => setOpen(true)} className="rounded-md p-1.5 text-ink2 hover:bg-raised lg:hidden" aria-label="Abrir menu">
             <Menu size={20} aria-hidden />
           </button>
@@ -126,7 +126,13 @@ function Sidebar({ onLogout }: { onLogout: () => void }) {
             return n ? { n, tone: 'warning' } : null
           },
         },
+      ],
+    },
+    {
+      title: 'Análise',
+      items: [
         { to: '/reports', label: 'Relatórios', Icon: BarChart3 },
+        { to: '/client-report', label: 'Relatório do cliente', Icon: FileText },
       ],
     },
   ]
@@ -158,7 +164,7 @@ function Sidebar({ onLogout }: { onLogout: () => void }) {
       <nav className="flex-1 overflow-y-auto px-3" aria-label="Navegação principal">
         {groups.map((g, i) => (
           <div key={i} className={i > 0 ? 'mt-4' : ''}>
-            {g.title && <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{g.title}</p>}
+            {g.title && <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted">{g.title}</p>}
             <ul className="space-y-0.5">
               {g.items.map((item) => {
                 const b = item.badge?.()
@@ -172,7 +178,7 @@ function Sidebar({ onLogout }: { onLogout: () => void }) {
                           <item.Icon size={17} className={isActive ? 'text-hud' : 'text-muted'} aria-hidden />
                           <span className="flex-1">{item.label}</span>
                           {b && (
-                            <span className="tnum min-w-[1.5rem] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold text-white"
+                            <span className="tnum min-w-[1.5rem] rounded-full px-1.5 py-0.5 text-center text-xs font-semibold text-white"
                               style={{ background: b.tone === 'critical' ? 'var(--critical)' : 'var(--warning)' }}>
                               {b.n}
                             </span>

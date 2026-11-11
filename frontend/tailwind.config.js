@@ -3,6 +3,12 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      // A notch larger than Tailwind's defaults: the dashboard is read by non-specialists too.
+      fontSize: {
+        xs: ['0.8125rem', { lineHeight: '1.15rem' }],
+        sm: ['0.90625rem', { lineHeight: '1.35rem' }],
+        base: ['0.96875rem', { lineHeight: '1.5rem' }],
+      },
       colors: {
         page: 'var(--page)',
         surface: 'var(--surface)',
