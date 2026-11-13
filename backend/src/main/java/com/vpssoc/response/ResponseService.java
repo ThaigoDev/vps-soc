@@ -89,6 +89,7 @@ public class ResponseService {
                 }
                 if (policy == SocProperties.Policy.AUTO && ex.getStatus() == Status.PROPOSED) {
                     ex.escalate(reason, clock.instant());
+                    publisher.publishEvent(new com.vpssoc.live.LiveUpdate("actions", hostId));
                 }
             }
             return Optional.empty();
@@ -139,6 +140,7 @@ public class ResponseService {
             throw new IllegalStateException("ação #" + id + " não está aguardando aprovação (" + a.getStatus() + ")");
         }
         a.approve(clock.instant());
+        publisher.publishEvent(new com.vpssoc.live.LiveUpdate("actions", a.getHostId()));
         return a;
     }
 
@@ -149,6 +151,7 @@ public class ResponseService {
             throw new IllegalStateException("ação #" + id + " não pode mais ser descartada (" + a.getStatus() + ")");
         }
         a.dismiss(clock.instant());
+        publisher.publishEvent(new com.vpssoc.live.LiveUpdate("actions", a.getHostId()));
         return a;
     }
 
@@ -159,6 +162,12 @@ public class ResponseService {
         Instant now = clock.instant();
         pending.forEach(a -> a.dispatch(now));
         return pending;
+    }
+
+    /** Puts back actions taken for an agent request that could no longer be answered. */
+    @Transactional
+    public void requeue(List<Long> ids) {
+        actions.findAllById(ids).forEach(ResponseAction::undispatch);
     }
 
     /** Called by the agent with the outcome of an action. */

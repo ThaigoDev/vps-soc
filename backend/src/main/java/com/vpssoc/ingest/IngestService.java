@@ -51,11 +51,13 @@ public class IngestService {
     private final PostureEvaluator posture;
     private final ServiceEvaluator serviceEvaluator;
     private final ResponseService response;
+    private final org.springframework.context.ApplicationEventPublisher publisher;
 
     public IngestService(HostRepository hosts, EventRepository events, HostMetricRepository metrics,
                          DetectionEngine engine, IncidentService incidents, SocProperties props,
                          ObjectMapper mapper, Clock clock, PostureEvaluator posture, ResponseService response,
-                         ServiceEvaluator serviceEvaluator) {
+                         ServiceEvaluator serviceEvaluator, org.springframework.context.ApplicationEventPublisher publisher) {
+        this.publisher = publisher;
         this.serviceEvaluator = serviceEvaluator;
         this.posture = posture;
         this.response = response;
@@ -73,6 +75,7 @@ public class IngestService {
     public IngestResult ingestEvents(String hostId, List<AgentEvent> batch, String remoteIp) {
         Instant now = clock.instant();
         Host host = touchHost(hostId, remoteIp, now);
+        publisher.publishEvent(new com.vpssoc.live.LiveUpdate("events", hostId));
 
         List<SecurityEvent> saved = new ArrayList<>(batch.size());
         int skipped = 0;
@@ -102,6 +105,7 @@ public class IngestService {
     public void heartbeat(Heartbeat hb, String remoteIp) {
         Instant now = clock.instant();
         Host host = touchHost(hb.hostId(), remoteIp, now);
+        publisher.publishEvent(new com.vpssoc.live.LiveUpdate("hosts", hb.hostId()));
         host.setHostname(truncate(hb.hostname(), 255));
         host.setOs(truncate(hb.os(), 255));
         host.setAgentVersion(truncate(hb.agentVersion(), 50));

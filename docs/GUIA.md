@@ -250,16 +250,22 @@ anexar num e-mail. Também dá para chegar nele pelo botão em **Relatórios**.
 
 ### Apresentação do projeto
 
-Uma página de apresentação com **scroll-telling**: um modelo 3D do sistema inteiro fica ao
-fundo e, conforme você rola, a câmera passeia pela parte de que o texto fala. A sequência é:
+Uma apresentação no estilo das páginas de produto, feita só com **prints reais do painel** e
+efeitos que acompanham a rolagem do mouse (*scroll-telling*):
 
-1. o problema (robôs atacando a VPS);
-2. o agente;
-3. o túnel seguro;
-4. a detecção;
-5. a resposta automática, com o firewall bloqueando o atacante;
-6. o painel e o alerta no celular;
-7. a arquitetura 3D das aplicações.
+- **Rolagem suave**, com inércia, como em sites de produto (biblioteca Lenis).
+- **Abertura:** o título surge palavra por palavra e o print do painel sobe e se endireita
+  conforme você rola.
+- **O problema:** a frase vai acendendo palavra por palavra.
+- **O painel:** uma janela de navegador fica fixa mostrando a **tela inteira**, e um destaque
+  desliza até a parte de que o texto fala, escurecendo o resto. As telas são: visão geral,
+  incidente, mapa, aplicações, resposta automática e relatório. Clique nos traços abaixo da
+  janela para pular de passo.
+- **O que detecta:** uma faixa que corre sozinha com os tipos de ataque e problema.
+- **Como funciona:** a seção trava na tela e os passos (agente → túnel → detecção → resposta →
+  alerta) andam para o lado enquanto você rola para baixo.
+- **Números** que contam sozinhos e uma **galeria em mosaico** com as telas reais, que se abrem
+  ao aparecer, cada uma com legenda.
 
 Abra em **`/apresentacao`** (por exemplo `http://localhost:8088/apresentacao`). Ela **não pede
 login** e usa dados de demonstração, então dá para projetar numa aula ou mandar o link. Também
@@ -267,10 +273,42 @@ há um atalho no menu lateral (**Apresentação do projeto**) e na tela de login
 
 ![Apresentação](img/apresentacao.png)
 
+**Versão em arquivo único (para levar a outro PC).** O arquivo
+[`docs/apresentacao/VPS-SOC-apresentacao.html`](apresentacao/VPS-SOC-apresentacao.html) tem
+tudo dentro: textos, imagens e estilo (cerca de 1,6 MB). Baixe, dê dois cliques e ele abre no navegador, **sem
+internet, sem Docker e sem login**. No GitHub, abra o arquivo e clique em *Download raw file*.
+As telas usadas ficam em `frontend/src/assets/presentation/` (JPG de 1600×1000); troque
+por prints novos se o painel mudar. Para gerar o arquivo de novo depois de mudar a apresentação:
+
+```bash
+cd frontend && npm run build:presentation
+```
+
 ### Ajuda e glossário
 
 Dentro do próprio painel: a rotina em 3 passos, o que tem em cada página, glossário e
 problemas comuns.
+
+### Tempo real
+
+O painel fica **ao vivo**: o servidor do SOC avisa o navegador no instante em que algo muda
+(Server-Sent Events), e o painel atualiza só o que mudou. Um ataque grave vira alarme na tela
+em menos de meio segundo depois de chegar ao SOC. O indicador no topo mostra **Ao vivo** (verde)
+quando essa conexão está aberta; se ela cair, o painel continua se atualizando a cada poucos
+segundos e reconecta sozinho.
+
+Do lado da VPS, o agente:
+
+- envia cada evento na hora (junta só o que chega em 0,15 s, para um ataque em rajada ir num
+  envio só);
+- deixa uma conexão aberta esperando ordens (*long polling*): quando o SOC decide bloquear um IP,
+  a ordem chega ao agente em milissegundos;
+- confere portas a cada 10 s, processos a cada 5 s e arquivos críticos a cada 15 s, e manda
+  sinal de vida a cada 15 s (servidor parado vira alerta em cerca de 45 s).
+
+> Essas melhorias do agente valem depois de **atualizar o agente na VPS** (seção *Instalando o
+> agente na VPS* do README). Com o agente antigo tudo continua funcionando, só que as ordens
+> chegam a cada 5 s, como antes.
 
 ### Alertas e tema
 

@@ -153,3 +153,8 @@ select, input {
 @media (prefers-reduced-motion: reduce) {
   .flow-dash, .ping-ring { animation: none; }
 }
+
+/* Lenis smooth scrolling (presentation) */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }

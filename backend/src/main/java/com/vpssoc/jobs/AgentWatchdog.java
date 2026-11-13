@@ -37,7 +37,7 @@ public class AgentWatchdog {
         this.clock = clock;
     }
 
-    @Scheduled(fixedDelay = 30_000, initialDelay = 30_000)
+    @Scheduled(fixedDelay = 10_000, initialDelay = 30_000)
     @Transactional
     public void checkHeartbeats() {
         Instant now = clock.instant();

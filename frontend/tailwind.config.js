@@ -24,6 +24,9 @@ export default {
         serious: 'var(--serious)',
         critical: 'var(--critical)',
       },
+      keyframes: {
+        marquee: { from: { transform: 'translateX(0)' }, to: { transform: 'translateX(-50%)' } },
+      },
       fontFamily: {
         sans: ['system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace'],

@@ -8,7 +8,7 @@ detecta, correlaciona e abre incidentes (com MITRE ATT&CK), e um dashboard React
 ┌───────────────────┐   HTTPS + token   ┌──────────────────────────────────────┐
 │ vps-soc-agent     │ ────────────────▶ │ nginx :8088  ─┬─ /      dashboard     │
 │  • journald/auth  │  eventos (batch)  │               └─ /api   Spring Boot   │
-│  • portas (/proc) │  heartbeat 30s    │                          │            │
+│  • portas (/proc) │  heartbeat 15s    │                          │            │
 │  • CPU/RAM/disco  │                   │   detecção → correlação → incidentes  │
 └───────────────────┘                   │                          │            │
                                         │   PostgreSQL        Telegram (opc.)   │
@@ -18,8 +18,12 @@ detecta, correlaciona e abre incidentes (com MITRE ATT&CK), e um dashboard React
 O backend roda **fora** da VPS monitorada. Se a VPS for comprometida, o atacante não consegue
 apagar o histórico, e o próprio silêncio do agente vira um incidente (`AGENT_OFFLINE`).
 
-> **Apresentação do projeto:** abra `/apresentacao` no painel (sem login) para um tour em 3D
-> com scroll-telling.
+> **Apresentação do projeto:** abra `/apresentacao` no painel (sem login) para um tour com
+> scroll-telling, ou baixe o arquivo único [`docs/apresentacao/VPS-SOC-apresentacao.html`](docs/apresentacao/VPS-SOC-apresentacao.html),
+> que abre em qualquer PC sem internet.
+>
+> **Tempo real:** o painel recebe as mudanças na hora (Server-Sent Events) e o agente recebe
+> as ordens de bloqueio em milissegundos (long polling). Veja *Tempo real* no [guia](docs/GUIA.md).
 >
 > **Novo por aqui?** Leia o [Guia do VPS-SOC](docs/GUIA.md): explica em linguagem simples o
 > que o projeto faz, como rodar, um tour pelo painel e os problemas mais comuns.
@@ -58,11 +62,11 @@ marcar um deles como falso positivo vale como “risco aceito” (não reabre en
 Qualquer arquivo monitorado que fique gravável por todos (`o+w`) sobe para Alto.
 
 **Integridade de arquivos (FIM)**: o agente calcula o SHA-256 dos arquivos acima a cada
-`SOC_FIM_INTERVAL` (60s) e guarda a baseline em `/var/lib/vps-soc-agent/fim.json` (hash, tamanho,
+`SOC_FIM_INTERVAL` (15s) e guarda a baseline em `/var/lib/vps-soc-agent/fim.json` (hash, tamanho,
 mtime, dono e permissão; nunca o conteúdo). A única exceção são as diretivas efetivas do
 `sshd_config`, guardadas para o evento dizer quais linhas mudaram. O `/etc/shadow` é só lido em
 streaming para o hash: o conteúdo nunca é interpretado, guardado ou enviado.
-**Processos**: `/proc` é varrido a cada `SOC_PROCESS_SCAN_INTERVAL` (15s); cada processo suspeito
+**Processos**: `/proc` é varrido a cada `SOC_PROCESS_SCAN_INTERVAL` (5s); cada processo suspeito
 gera um `PROCESS_SUSPICIOUS` uma vez enquanto estiver rodando.
 
 Um incidente fica ativo (`OPEN`/`ACKNOWLEDGED`) por regra + chave. Novas evidências entram nele
@@ -130,7 +134,7 @@ memória, usuário, modo) e acrescenta, para cada app:
   proposta de reinício na página Resposta (`SOC_RESPONSE_RESTART_PM2`, padrão: com aprovação).
 
 O agente acha os daemons PM2 já rodando (`PM2 vX: God Daemon (<PM2_HOME>)`) e roda `pm2 jlist`
-como o dono de cada um, a cada `SOC_PM2_INTERVAL` (30 s). Ele nunca inicia um daemon e não escreve
+como o dono de cada um, a cada `SOC_PM2_INTERVAL` (15 s). Ele nunca inicia um daemon e não escreve
 nada no `PM2_HOME`. Do `jlist` só são lidos os campos operacionais: as variáveis de ambiente dos apps
 (senhas, chaves de API) nunca saem da VPS.
 

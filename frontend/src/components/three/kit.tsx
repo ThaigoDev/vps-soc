@@ -12,6 +12,7 @@ import * as THREE from 'three'
 export type State3D = 'ok' | 'warn' | 'bad' | 'off'
 
 export interface Palette {
+  page: string
   ink: string
   muted: string
   line: string
@@ -29,6 +30,7 @@ function readPalette(): Palette {
   const css = getComputedStyle(document.documentElement)
   const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback
   return {
+    page: v('--page', '#0b0f14'),
     ink: v('--ink', '#e8edf3'),
     muted: v('--muted', '#99a5b4'),
     line: v('--line', '#243040'),
