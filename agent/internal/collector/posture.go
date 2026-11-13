@@ -42,8 +42,11 @@ type Posture struct {
 	Certificates    []*CertInfo  `json:"certificates,omitempty"` // TLS certs of certbot and nginx
 }
 
-// PostureReader caches the slow checks (systemctl, sshd -T) for a few minutes.
+// PostureReader caches the slow checks (sshd -T, certificates) for a few minutes. Failed
+// units come from the UnitWatcher when one is set, so a crashed service shows up at once.
 type PostureReader struct {
+	Units *UnitWatcher
+
 	mu     sync.Mutex
 	slowAt time.Time
 	failed []string
@@ -62,10 +65,15 @@ func (r *PostureReader) Read(ctx context.Context) Posture {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if time.Since(r.slowAt) > slowPostureEvery {
-		r.failed = failedUnits(ctx)
+		if r.Units == nil {
+			r.failed = failedUnits(ctx)
+		}
 		r.ssh = sshSettings(ctx)
 		r.certs = allCertificates()
 		r.slowAt = time.Now()
+	}
+	if r.Units != nil {
+		r.failed = r.Units.Current()
 	}
 	p.FailedUnits = r.failed // nil (sent as null) when systemctl could not be asked: the SOC then keeps its findings
 	p.SSH = r.ssh

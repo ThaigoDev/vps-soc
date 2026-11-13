@@ -303,6 +303,13 @@ Do lado da VPS, o agente:
   envio só);
 - deixa uma conexão aberta esperando ordens (*long polling*): quando o SOC decide bloquear um IP,
   a ordem chega ao agente em milissegundos;
+- percebe **na hora** (≈1 s) quando um app do PM2 cai, é parado, reinicia ou volta: ele olha os
+  processos filhos do PM2 a cada segundo (leitura barata do `/proc`) e só chama o `pm2 jlist`
+  quando algo mudou;
+- confere os serviços systemd em falha a cada 2 s (antes: a cada 5 min);
+- quando um serviço cai ou volta, ou depois de executar uma ação (ex.: reiniciar pelo SOC), manda
+  o sinal de vida **na mesma hora** com o estado novo, então o incidente abre/fecha e o painel
+  atualiza em 1–2 s, sem esperar o próximo ciclo;
 - confere portas a cada 10 s, processos a cada 5 s e arquivos críticos a cada 15 s, e manda
   sinal de vida a cada 15 s (servidor parado vira alerta em cerca de 45 s).
 

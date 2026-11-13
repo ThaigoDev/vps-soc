@@ -86,6 +86,13 @@ type PM2Monitor struct {
 	State    *state.Store
 	Emit     func(event.Event)
 	Enricher *Enricher // optional: listeners, probes, security facts, nginx sites
+	// OnChange is called after a scan that found a status change, restart, new or removed
+	// app (so the heartbeat can carry the new state right away).
+	OnChange func()
+
+	trigOnce sync.Once
+	trig     chan struct{}
+	daemons  map[int]bool // pids of the PM2 daemons seen on the last scan
 
 	mu       sync.RWMutex
 	current  []Service
@@ -108,6 +115,24 @@ func (m *PM2Monitor) Current() ([]Service, PM2Status) {
 	return m.current, m.status
 }
 
+// Trigger asks for a scan now (after an action restarted an app, for instance).
+func (m *PM2Monitor) Trigger() {
+	select {
+	case m.trigger() <- struct{}{}:
+	default:
+	}
+}
+
+func (m *PM2Monitor) trigger() chan struct{} {
+	m.trigOnce.Do(func() { m.trig = make(chan struct{}, 1) })
+	return m.trig
+}
+
+// pm2WatchEvery is how often the cheap /proc check runs. `pm2 jlist` starts a node
+// process, so it only runs when the processes under a PM2 daemon change (an app died,
+// was stopped, restarted or started) and every Interval as a safety net.
+const pm2WatchEvery = time.Second
+
 func (m *PM2Monitor) Run(ctx context.Context) {
 	m.previous = map[string]serviceMark{}
 	if found, err := m.State.LoadJSON(pm2StateFile, &m.previous); err == nil && found {
@@ -115,18 +140,79 @@ func (m *PM2Monitor) Run(ctx context.Context) {
 	}
 	ticker := time.NewTicker(m.Interval)
 	defer ticker.Stop()
+	watch := time.NewTicker(pm2WatchEvery)
+	defer watch.Stop()
+	settles := 0 // quick rescans in a row while an app is in a transient status (stopping, launching...)
 	for {
-		m.scan(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
+		transient := m.scan(ctx)
+		fp := PM2Fingerprint(m.daemons)
+		var settle <-chan time.Time
+		if transient && settles < 10 {
+			settles++
+			settle = time.After(time.Second)
+		} else if !transient {
+			settles = 0
+		}
+	wait:
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				break wait
+			case <-m.trigger():
+				break wait
+			case <-settle:
+				break wait
+			case <-watch.C:
+				if now := PM2Fingerprint(m.daemons); now != fp {
+					// Give PM2 a moment to record the new status before asking it.
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(300 * time.Millisecond):
+					}
+					break wait
+				}
+			}
 		}
 	}
 }
 
-func (m *PM2Monitor) scan(ctx context.Context) {
+// PM2Fingerprint lists the PM2 daemons still alive and their direct children (the apps,
+// in fork and cluster mode) with their start times. It only reads /proc/<pid>/stat.
+func PM2Fingerprint(daemons map[int]bool) string {
+	if len(daemons) == 0 {
+		return ""
+	}
+	var parts []string
+	dirs, _ := filepath.Glob("/proc/[0-9]*")
+	for _, dir := range dirs {
+		pid, err := strconv.Atoi(filepath.Base(dir))
+		if err != nil {
+			continue
+		}
+		stat, err := os.ReadFile(dir + "/stat")
+		if err != nil {
+			continue
+		}
+		_, ppid, start, ok := ParseProcStat(string(stat))
+		if ok && (daemons[pid] || daemons[ppid]) {
+			parts = append(parts, fmt.Sprintf("%d:%d:%d", pid, ppid, start))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+// scan lists the apps of every PM2 daemon and reports whether one of them is in a
+// transient status worth checking again shortly.
+func (m *PM2Monitor) scan(ctx context.Context) (transient bool) {
 	daemons := FindPM2Daemons()
+	m.daemons = map[int]bool{}
+	for _, d := range daemons {
+		m.daemons[d.PID] = true
+	}
 	var services []Service
 	st := PM2Status{Daemons: []string{}}
 	var errs []string
@@ -150,16 +236,30 @@ func (m *PM2Monitor) scan(ctx context.Context) {
 		return services[i].PmID < services[j].PmID
 	})
 
+	changed := false
 	if st.Error == "" || len(services) > 0 {
-		m.diff(services)
+		changed = m.diff(services)
 	}
 	m.mu.Lock()
 	m.current, m.status = services, st
 	m.mu.Unlock()
+	if changed && m.OnChange != nil {
+		m.OnChange()
+	}
+	for _, s := range services {
+		switch s.Status {
+		case "online", "stopped", "errored":
+		default:
+			transient = true
+		}
+	}
+	return transient
 }
 
-func (m *PM2Monitor) diff(services []Service) {
+// diff emits events for what changed since the last scan and reports whether anything did.
+func (m *PM2Monitor) diff(services []Service) (changed bool) {
 	now := time.Now()
+	emit := func(e event.Event) { changed = true; m.Emit(e) }
 	seen := map[string]serviceMark{}
 	for _, s := range services {
 		mark := serviceMark{Name: s.Name, Status: s.Status, Restarts: s.Restarts}
@@ -170,19 +270,19 @@ func (m *PM2Monitor) diff(services []Service) {
 		prev, existed := m.previous[s.key()]
 		switch {
 		case !existed:
-			m.Emit(serviceEvent(event.ServiceAdded, s, now, fmt.Sprintf("PM2: app %s (id %d) adicionado, status %s", s.Name, s.PmID, s.Status), nil))
+			emit(serviceEvent(event.ServiceAdded, s, now, fmt.Sprintf("PM2: app %s (id %d) adicionado, status %s", s.Name, s.PmID, s.Status), nil))
 		default:
 			if prev.Status != s.Status {
 				meta := map[string]any{"from": prev.Status, "to": s.Status}
 				if s.Status != "online" {
 					meta["errLogTail"] = tailLines(s.ErrLogPath, 15)
 				}
-				m.Emit(serviceEvent(event.ServiceStatusChanged, s, now,
+				emit(serviceEvent(event.ServiceStatusChanged, s, now,
 					fmt.Sprintf("PM2: %s mudou de %s para %s", s.Name, prev.Status, s.Status), meta))
 			}
 			if s.Restarts > prev.Restarts {
 				delta := s.Restarts - prev.Restarts
-				m.Emit(serviceEvent(event.ServiceRestarted, s, now,
+				emit(serviceEvent(event.ServiceRestarted, s, now,
 					fmt.Sprintf("PM2: %s reiniciou %d vez(es) (total %d)", s.Name, delta, s.Restarts),
 					map[string]any{"delta": delta, "errLogTail": tailLines(s.ErrLogPath, 15)}))
 			}
@@ -191,7 +291,7 @@ func (m *PM2Monitor) diff(services []Service) {
 	if m.baseline {
 		for k, prev := range m.previous {
 			if _, ok := seen[k]; !ok {
-				m.Emit(event.Event{Type: event.ServiceRemoved, OccurredAt: now,
+				emit(event.Event{Type: event.ServiceRemoved, OccurredAt: now,
 					Message:  fmt.Sprintf("PM2: app %s removido da lista", prev.Name),
 					Metadata: map[string]any{"service": prev.Name, "source": "pm2", "lastStatus": prev.Status}})
 			}
@@ -202,6 +302,7 @@ func (m *PM2Monitor) diff(services []Service) {
 	if err := m.State.SaveJSON(pm2StateFile, seen); err != nil {
 		log.Printf("save pm2 state: %v", err)
 	}
+	return changed
 }
 
 func serviceEvent(typ string, s Service, ts time.Time, msg string, extra map[string]any) event.Event {

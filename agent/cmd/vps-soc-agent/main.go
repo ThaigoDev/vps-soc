@@ -92,7 +92,27 @@ func main() {
 		Enabled: cfg.ResponseEnabled && !*dryRun, Firewall: fw, Allowlist: allow,
 		QuarantineDir: filepath.Join(cfg.StateDir, "quarantine"), Run: response.DefaultRunner, Self: os.Getpid(),
 	}
-	run(func() { response.Poll(ctx, snd, executor, cfg.ActionPollInterval) })
+	// kick sends a heartbeat now instead of at the next tick: the SOC then sees a service
+	// that went down or came back within a second or two.
+	kick := make(chan struct{}, 1)
+	kickHeartbeat := func() {
+		select {
+		case kick <- struct{}{}:
+		default:
+		}
+	}
+	units := &collector.UnitWatcher{Interval: cfg.UnitWatchInterval, OnChange: kickHeartbeat}
+	run(func() { units.Run(ctx) })
+	ports := &collector.PortMonitor{Interval: cfg.PortScanInterval, State: store, Emit: snd.Enqueue}
+	pm2 := &collector.PM2Monitor{Interval: cfg.PM2Interval, State: store, Emit: snd.Enqueue, OnChange: kickHeartbeat,
+		Enricher: &collector.Enricher{Ports: func() []collector.Listener { return ports.Current() }}}
+	run(func() {
+		response.Poll(ctx, snd, executor, cfg.ActionPollInterval, func() {
+			units.Trigger()
+			pm2.Trigger()
+			kickHeartbeat()
+		})
+	})
 
 	snd.Enqueue(event.Event{
 		Type: event.AgentStarted, OccurredAt: time.Now(),
@@ -108,7 +128,6 @@ func main() {
 		}
 	})
 
-	ports := &collector.PortMonitor{Interval: cfg.PortScanInterval, State: store, Emit: snd.Enqueue}
 	run(func() { ports.Run(ctx) })
 
 	files := &collector.FileMonitor{Interval: cfg.FIMInterval, State: store, Emit: snd.Enqueue}
@@ -117,15 +136,13 @@ func main() {
 	procs := &collector.ProcessMonitor{Interval: cfg.ProcScanInterval, Emit: snd.Enqueue}
 	run(func() { procs.Run(ctx) })
 
-	pm2 := &collector.PM2Monitor{Interval: cfg.PM2Interval, State: store, Emit: snd.Enqueue,
-		Enricher: &collector.Enricher{Ports: func() []collector.Listener { return ports.Current() }}}
 	run(func() { pm2.Run(ctx) })
 	run(func() { uploadInventories(ctx, pm2, snd, store, cfg.HostID) })
 
 	run(func() {
 		metrics := &collector.MetricsReader{}
 		metrics.Read() // prime CPU and network counters
-		posture := &collector.PostureReader{}
+		posture := &collector.PostureReader{Units: units}
 		ticker := time.NewTicker(cfg.HeartbeatInterval)
 		defer ticker.Stop()
 		sweep := time.NewTicker(time.Minute)
@@ -138,6 +155,18 @@ func main() {
 				guard.Sweep(now)
 				continue
 			case <-ticker.C:
+			case <-kick:
+				// Coalesce a burst (status change + restart + unit change) into one heartbeat.
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(200 * time.Millisecond):
+				}
+				select {
+				case <-kick:
+				default:
+				}
+				ticker.Reset(cfg.HeartbeatInterval)
 			}
 			p := posture.Read(ctx)
 			listeners := ports.Current()

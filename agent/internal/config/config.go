@@ -24,6 +24,7 @@ type Config struct {
 	FIMInterval       time.Duration
 	ProcScanInterval  time.Duration
 	PM2Interval       time.Duration
+	UnitWatchInterval time.Duration // failed systemd services
 	AllowInsecureHTTP bool
 
 	// Active response
@@ -60,6 +61,9 @@ func Load() (Config, error) {
 		return c, err
 	}
 	if c.PM2Interval, err = duration("SOC_PM2_INTERVAL", 15*time.Second); err != nil {
+		return c, err
+	}
+	if c.UnitWatchInterval, err = duration("SOC_UNIT_WATCH_INTERVAL", 2*time.Second); err != nil {
 		return c, err
 	}
 	c.AllowInsecureHTTP = os.Getenv("SOC_ALLOW_INSECURE_HTTP") == "true"
