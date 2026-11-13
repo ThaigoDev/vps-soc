@@ -79,9 +79,30 @@ func (m *FileMonitor) Run(ctx context.Context) {
 		found = false
 	}
 
+	// inotify wakes the loop the moment a watched file changes; the ticker stays as a safety
+	// net (inotify unavailable, a directory created later, a missed event).
+	changed := make(chan struct{}, 1)
+	watcher, werr := newDirWatcher()
+	if werr != nil {
+		log.Printf("fim: inotify unavailable, checking every %s only: %v", m.Interval, werr)
+	} else {
+		watcher.Watch(watchDirsFor(patterns))
+		go watcher.Run(ctx, func(path string) {
+			if matchesAny(patterns, path) {
+				select {
+				case changed <- struct{}{}:
+				default:
+				}
+			}
+		})
+	}
+
 	ticker := time.NewTicker(m.Interval)
 	defer ticker.Stop()
 	for {
+		if watcher != nil {
+			watcher.Watch(watchDirsFor(patterns)) // new users' ~/.ssh, a cron dir created later
+		}
 		now := SnapshotFiles(patterns)
 		if !found {
 			paths := make([]string, 0, len(now))
@@ -109,6 +130,13 @@ func (m *FileMonitor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		case <-changed:
+			// Let a multi-step write (tmp file + rename, passwd + shadow) settle.
+			time.Sleep(100 * time.Millisecond)
+			select {
+			case <-changed:
+			default:
+			}
 		}
 	}
 }

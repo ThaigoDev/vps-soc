@@ -186,6 +186,10 @@ export async function api<T>(path: string, init?: RequestInit & { token?: string
     setToken(null)
     throw new UnauthorizedError('Sessão expirada ou token inválido')
   }
+  if (res.status === 429) {
+    const wait = Number(res.headers.get('Retry-After') ?? 0)
+    throw new Error(`Muitas tentativas com token inválido. Tente de novo em ${Math.max(1, Math.ceil(wait / 60))} min.`)
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail ?? body.error ?? `Erro ${res.status}`)
@@ -283,6 +287,7 @@ export interface ResponsePolicy {
   diskCleanup: Policy
   restartService: Policy
   restartPm2: Policy
+  blockWebAttack?: Policy
   bruteForceBlockHours: number
   compromiseBlockHours: number
   allowlist: string[]

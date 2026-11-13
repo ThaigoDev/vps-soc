@@ -30,6 +30,9 @@ const (
 	ServiceRestarted     = "SERVICE_RESTARTED"
 	ServiceAdded         = "SERVICE_ADDED"
 	ServiceRemoved       = "SERVICE_REMOVED"
+
+	// Requests in the web server access log that look like attacks (per IP and window)
+	WebAttack = "WEB_ATTACK"
 )
 
 type Event struct {

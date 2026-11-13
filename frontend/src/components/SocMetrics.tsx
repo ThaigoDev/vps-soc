@@ -34,6 +34,7 @@ export const ruleLabel: Record<string, string> = {
   SERVICE_DEBUG_EXPOSED: 'Debugger do Node aberto',
   SERVICE_NOT_RESPONDING: 'App não responde',
   CERT_EXPIRING: 'Certificado TLS vencendo',
+  WEB_ATTACK: 'Ataque web',
 }
 
 export function useKpis(days: number) {

@@ -58,6 +58,11 @@ public class ResponsePlanner {
             case RuleIds.SSH_BRUTE_FORCE -> blockSource(inc, cfg.effective(cfg.blockBruteForce()), cfg.bruteForceBlockTtl(), false);
             case RuleIds.SSH_COMPROMISE -> blockSource(inc, cfg.effective(cfg.blockCompromise()), cfg.compromiseBlockTtl(), true);
             case RuleIds.SUSPICIOUS_PROCESS, RuleIds.WEB_SHELL -> killProcess(inc, change.trigger());
+            case RuleIds.WEB_ATTACK -> {
+                if (change.created()) {
+                    blockSource(inc, cfg.effective(cfg.blockWebAttack()), cfg.bruteForceBlockTtl(), false);
+                }
+            }
             case RuleIds.DISK_USAGE_HIGH -> {
                 if (change.created()) {
                     response.request(inc.getHostId(), inc.getId(), Type.DISK_CLEANUP, "/", Map.of(),
@@ -116,12 +121,14 @@ public class ResponsePlanner {
             return; // never block the owner's own paths; the explanation tells the operator why
         }
         String reason;
-        if (!compromise && events.existsSuccessBefore(inc.getHostId(), ip, inc.getFirstSeen())) {
+        if (!compromise && RuleIds.SSH_BRUTE_FORCE.equals(inc.getRuleId()) && events.existsSuccessBefore(inc.getHostId(), ip, inc.getFirstSeen())) {
             policy = Policy.APPROVAL;
             reason = "Brute force de %s, mas esse IP já fez login com sucesso antes: pode ser você errando a senha. "
                     .formatted(ip) + "Bloqueio aguardando sua confirmação.";
         } else if (compromise) {
             reason = "Login bem-sucedido após brute force: cortar o acesso de %s (derruba sessões abertas)".formatted(ip);
+        } else if (RuleIds.WEB_ATTACK.equals(inc.getRuleId())) {
+            reason = "Ataque aos sites vindo de %s: bloquear no firewall por %s".formatted(ip, human(ttl));
         } else {
             reason = "Brute force SSH de %s: bloquear no firewall por %s".formatted(ip, human(ttl));
         }

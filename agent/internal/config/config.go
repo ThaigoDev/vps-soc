@@ -25,6 +25,7 @@ type Config struct {
 	ProcScanInterval  time.Duration
 	PM2Interval       time.Duration
 	UnitWatchInterval time.Duration // failed systemd services
+	WebLogs           []string      // access log globs; empty = web monitoring off
 	AllowInsecureHTTP bool
 
 	// Active response
@@ -65,6 +66,17 @@ func Load() (Config, error) {
 	}
 	if c.UnitWatchInterval, err = duration("SOC_UNIT_WATCH_INTERVAL", 2*time.Second); err != nil {
 		return c, err
+	}
+	switch v := strings.TrimSpace(os.Getenv("SOC_WEB_LOGS")); v {
+	case "":
+		c.WebLogs = []string{"/var/log/nginx/*access*.log", "/var/log/apache2/*access*.log", "/var/log/httpd/*access*log"}
+	case "off", "false":
+	default:
+		for _, p := range strings.Split(v, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				c.WebLogs = append(c.WebLogs, p)
+			}
+		}
 	}
 	c.AllowInsecureHTTP = os.Getenv("SOC_ALLOW_INSECURE_HTTP") == "true"
 

@@ -31,6 +31,10 @@ management:
 soc:
   # Token the agents send as "Authorization: Bearer ..."
   agent-token: ${SOC_AGENT_TOKEN:}
+  # Optional: one token per server, "srv731680=<token>,web2=<token>". A host token is only
+  # accepted for its own host id, so a stolen token cannot impersonate other servers.
+  # With host tokens set, SOC_AGENT_TOKEN can be left empty to require them.
+  agent-host-tokens: ${SOC_AGENT_HOST_TOKENS:}
   # Token the dashboard uses to call the API
   dashboard-token: ${SOC_DASHBOARD_TOKEN:}
   retention:
@@ -39,6 +43,9 @@ soc:
   detection:
     brute-force-threshold: ${SOC_BRUTE_FORCE_THRESHOLD:10}
     brute-force-window: ${SOC_BRUTE_FORCE_WINDOW:PT1M}
+    # Slow brute force: an attacker pacing attempts to stay under the threshold above
+    slow-brute-force-threshold: ${SOC_SLOW_BRUTE_FORCE_THRESHOLD:20}
+    slow-brute-force-window: ${SOC_SLOW_BRUTE_FORCE_WINDOW:PT1H}
     spray-distinct-users: ${SOC_SPRAY_DISTINCT_USERS:5}
     spray-window: PT5M
     compromise-min-failures: ${SOC_COMPROMISE_MIN_FAILURES:5}
@@ -66,6 +73,8 @@ soc:
     restart-service: ${SOC_RESPONSE_RESTART_SERVICE:APPROVAL}
     # Restart a PM2 app that crashed (status errored)
     restart-pm2: ${SOC_RESPONSE_RESTART_PM2:APPROVAL}
+    # Block an IP that tries to exploit the web apps (SQL injection, traversal, Log4Shell...)
+    block-web-attack: ${SOC_RESPONSE_BLOCK_WEB_ATTACK:APPROVAL}
     # A PM2 app using more than this share of the host RAM opens SERVICE_HIGH_MEMORY
     service-memory-percent: ${SOC_SERVICE_MEMORY_PERCENT:40}
     brute-force-block-ttl: ${SOC_RESPONSE_BRUTE_FORCE_TTL:PT24H}

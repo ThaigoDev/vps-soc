@@ -57,6 +57,9 @@ function PolicyCard() {
     { label: 'Limpar disco cheio', policy: p.diskCleanup, detail: 'journald > 500 MB + cache do apt' },
     { label: 'Reiniciar serviço em falha', policy: p.restartService, detail: 'systemd; só se ainda estiver em falha' },
     { label: 'Reiniciar app PM2 que caiu', policy: p.restartPm2, detail: 'pm2 restart quando o app fica errored' },
+    ...(p.blockWebAttack
+      ? [{ label: 'Bloquear ataque aos sites', policy: p.blockWebAttack, detail: `${p.bruteForceBlockHours} h · SQL injection, traversal, Log4Shell, sqlmap...` }]
+      : []),
   ]
   const color = (v: Policy) => (v === 'AUTO' ? 'var(--good)' : v === 'APPROVAL' ? 'var(--warning)' : 'var(--muted)')
   return (

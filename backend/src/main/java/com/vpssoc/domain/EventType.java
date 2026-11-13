@@ -24,7 +24,9 @@ public enum EventType {
     SERVICE_STATUS_CHANGED(Severity.LOW, Category.SERVICE),
     SERVICE_RESTARTED(Severity.LOW, Category.SERVICE),
     SERVICE_ADDED(Severity.INFO, Category.SERVICE),
-    SERVICE_REMOVED(Severity.LOW, Category.SERVICE);
+    SERVICE_REMOVED(Severity.LOW, Category.SERVICE),
+    /** Requests in the web server access log that look like attacks, aggregated per IP by the agent. */
+    WEB_ATTACK(Severity.LOW, Category.NETWORK);
 
     public enum Category { AUTH_FAILURE, AUTH_SUCCESS, PRIVILEGE, NETWORK, AGENT, FILE, PROCESS, RESPONSE, SERVICE }
 

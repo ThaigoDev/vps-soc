@@ -49,6 +49,9 @@ func main() {
 	defer stop()
 
 	snd := sender.New(cfg.ServerURL, cfg.AgentToken, cfg.HostID, *dryRun)
+	if !*dryRun {
+		snd.Spool = store
+	}
 	snd.OnDelivered = func(cursor string) {
 		if err := store.SaveCursor(cursor); err != nil {
 			log.Printf("save cursor: %v", err)
@@ -132,6 +135,11 @@ func main() {
 
 	files := &collector.FileMonitor{Interval: cfg.FIMInterval, State: store, Emit: snd.Enqueue}
 	run(func() { files.Run(ctx) })
+
+	if len(cfg.WebLogs) > 0 {
+		web := &collector.WebLogMonitor{Patterns: cfg.WebLogs, Emit: snd.Enqueue}
+		run(func() { web.Run(ctx) })
+	}
 
 	procs := &collector.ProcessMonitor{Interval: cfg.ProcScanInterval, Emit: snd.Enqueue}
 	run(func() { procs.Run(ctx) })

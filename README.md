@@ -32,7 +32,8 @@ apagar o histórico, e o próprio silêncio do agente vira um incidente (`AGENT_
 
 | Regra | Gatilho | Severidade | MITRE |
 |---|---|---|---|
-| `SSH_BRUTE_FORCE` | ≥10 falhas SSH do mesmo IP em 60s (um incidente por IP; marca spraying se ≥5 usuários) | Médio | T1110.001 / .003 |
+| `SSH_BRUTE_FORCE` | ≥10 falhas SSH do mesmo IP em 60s (um incidente por IP; marca spraying se ≥5 usuários), ou **brute force lento**: ≥20 falhas em 1 h espaçadas para fugir do limite de 60s | Médio | T1110.001 / .003 |
+| `WEB_ATTACK` | ≥3 requisições de exploração em 10 min do mesmo IP no access log do nginx/Apache (SQL injection, path traversal, injeção de comando, Log4Shell, XSS), ou ferramenta de ataque no User-Agent (sqlmap, nikto, nuclei...). Varreduras atrás de `/.env` e `/wp-login.php` ficam só como eventos | Médio | T1190, T1595.002 |
 | `SSH_LOGIN_AFTER_BRUTE_FORCE` | login bem-sucedido de um IP com ≥5 falhas nos últimos 30 min | **Crítico** | T1110, T1078 |
 | ↳ correlação | `sudo` do mesmo usuário, portas novas, arquivos monitorados alterados e processos suspeitos no host entram nesse incidente | risco 100 | +T1548.003, T1571, T1098.004, T1053.003, T1505.003, T1059.004 |
 | `SSH_ROOT_LOGIN` | login direto como root | Alto | T1078.003 |
@@ -61,13 +62,29 @@ marcar um deles como falso positivo vale como “risco aceito” (não reabre en
 
 Qualquer arquivo monitorado que fique gravável por todos (`o+w`) sobe para Alto.
 
-**Integridade de arquivos (FIM)**: o agente calcula o SHA-256 dos arquivos acima a cada
-`SOC_FIM_INTERVAL` (15s) e guarda a baseline em `/var/lib/vps-soc-agent/fim.json` (hash, tamanho,
+**Integridade de arquivos (FIM)**: o agente é avisado pelo kernel (inotify) no instante em que um
+desses arquivos muda (~0,1 s) e calcula o SHA-256 dele; a varredura a cada `SOC_FIM_INTERVAL` (15s)
+fica como rede de segurança. Guarda a baseline em `/var/lib/vps-soc-agent/fim.json` (hash, tamanho,
 mtime, dono e permissão; nunca o conteúdo). A única exceção são as diretivas efetivas do
 `sshd_config`, guardadas para o evento dizer quais linhas mudaram. O `/etc/shadow` é só lido em
 streaming para o hash: o conteúdo nunca é interpretado, guardado ou enviado.
-**Processos**: `/proc` é varrido a cada `SOC_PROCESS_SCAN_INTERVAL` (5s); cada processo suspeito
-gera um `PROCESS_SUSPICIOUS` uma vez enquanto estiver rodando.
+**Processos**: o agente recebe do kernel cada `exec` no momento em que acontece (*process
+connector*, via netlink), então até um binário que roda por meio segundo em `/tmp` é pego. O `/proc`
+continua sendo varrido a cada `SOC_PROCESS_SCAN_INTERVAL` (5s) para o que já rodava antes do agente;
+cada processo suspeito gera um `PROCESS_SUSPICIOUS` uma vez enquanto estiver rodando.
+
+**Web**: o agente segue os access logs do nginx/Apache (`SOC_WEB_LOGS`, padrão
+`/var/log/nginx/*access*.log`), classifica cada requisição (decodificando a URL duas vezes, como os
+atacantes codificam) e manda um `WEB_ATTACK` por IP a cada 10 s, com contagem por tipo e exemplos.
+Tráfego normal não sai da VPS.
+
+**Robustez do agente**: se o SOC estiver fora do ar, os eventos ficam em memória e também em
+`/var/lib/vps-soc-agent/pending-events.json`, então nem um reboot da VPS perde o que aconteceu
+(eventos do journald são relidos pelo cursor, sem duplicar).
+
+**Autenticação da API**: um endereço que manda 10 tokens errados em 10 min fica bloqueado (HTTP 429)
+por 15 min. Opcionalmente, cada servidor pode ter o seu token (`SOC_AGENT_HOST_TOKENS`): um token
+roubado de uma VPS não consegue mandar eventos nem pegar ordens em nome de outra.
 
 Um incidente fica ativo (`OPEN`/`ACKNOWLEDGED`) por regra + chave. Novas evidências entram nele
 em vez de abrir outro. O security score parte de 100 e perde 40/20/5/1 por incidente
@@ -220,6 +237,7 @@ scripts/    simulate-attack.mjs
 ## Próximas fases
 
 - **FIM com autoria**: integrar auditd para saber quem alterou cada arquivo monitorado.
+- **Painel multiusuário**: login por usuário, papéis (analista/admin) e auditoria de quem aprovou cada ação.
 - **Processos**: conexões de saída novas.
 - **Threat intel**: AbuseIPDB + GeoLite2 (offline), com cache por IP.
 - **Resposta**: remover chave SSH plantada (com backup) e isolar conta comprometida; bloqueio também no firewall da Hostinger via API.

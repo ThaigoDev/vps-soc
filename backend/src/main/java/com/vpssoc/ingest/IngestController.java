@@ -33,20 +33,35 @@ public class IngestController {
         this.response = response;
     }
 
+    /**
+     * A per-host token only speaks for its own host: a token stolen from one VPS cannot feed
+     * events into, or take actions queued for, another one.
+     */
+    static void requireOwnHost(HttpServletRequest req, String hostId) {
+        Object bound = req.getAttribute(com.vpssoc.config.ApiTokenFilter.AGENT_HOST_ATTR);
+        if (bound != null && !bound.equals(hostId)) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN,
+                    "este token é do host " + bound + ", não de " + hostId);
+        }
+    }
+
     @PostMapping("/events")
     public IngestResult events(@Valid @RequestBody EventBatch batch, HttpServletRequest req) {
+        requireOwnHost(req, batch.hostId());
         return service.ingestEvents(batch.hostId(), batch.events(), req.getRemoteAddr());
     }
 
     @PostMapping("/heartbeat")
     public ResponseEntity<Void> heartbeat(@Valid @RequestBody Heartbeat hb, HttpServletRequest req) {
+        requireOwnHost(req, hb.hostId());
         service.heartbeat(hb, req.getRemoteAddr());
         return ResponseEntity.noContent().build();
     }
 
     /** An app's installed packages (sent when its lockfile changes and once a day). */
     @PostMapping("/inventory")
-    public ResponseEntity<Void> inventory(@Valid @RequestBody InventoryUpload u) {
+    public ResponseEntity<Void> inventory(@Valid @RequestBody InventoryUpload u, HttpServletRequest http) {
+        requireOwnHost(http, u.hostId());
         vulns.ingest(u.hostId(), u.service(), u.pm2Home(), u.lockfile(), u.hash(), u.packages());
         vulns.scanLater(u.hostId(), u.service());
         return ResponseEntity.accepted().build();
@@ -59,12 +74,15 @@ public class IngestController {
      * it answers right away.
      */
     @PostMapping("/actions/poll")
-    public ActionOrders poll(@Valid @RequestBody ActionPoll req) {
+    public ActionOrders poll(@Valid @RequestBody ActionPoll req, HttpServletRequest http) {
+        requireOwnHost(http, req.hostId());
         return take(req.hostId());
     }
 
     @PostMapping(path = "/actions/poll", params = "wait")
-    public DeferredResult<ActionOrders> longPoll(@Valid @RequestBody ActionPoll req, @RequestParam int wait) {
+    public DeferredResult<ActionOrders> longPoll(@Valid @RequestBody ActionPoll req, @RequestParam int wait,
+                                                 HttpServletRequest http) {
+        requireOwnHost(http, req.hostId());
         int seconds = Math.clamp(wait, 1, 25);
         // The container timeout is only a backstop: our own timer answers first.
         DeferredResult<ActionOrders> result = new DeferredResult<>((seconds + 15) * 1000L, () -> new ActionOrders(List.of()));
@@ -107,7 +125,8 @@ public class IngestController {
     });
 
     @PostMapping("/actions/{id}/result")
-    public ResponseEntity<Void> result(@PathVariable long id, @Valid @RequestBody ActionResult r) {
+    public ResponseEntity<Void> result(@PathVariable long id, @Valid @RequestBody ActionResult r, HttpServletRequest http) {
+        requireOwnHost(http, r.hostId());
         ResponseAction.Status status;
         try {
             status = ResponseAction.Status.valueOf(r.status());

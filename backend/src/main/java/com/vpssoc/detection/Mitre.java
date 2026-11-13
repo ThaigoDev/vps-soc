@@ -24,6 +24,7 @@ public final class Mitre {
     public static final String WEB_SHELL = "T1505.003";
     public static final String FILE_DELETION = "T1070.004";
     public static final String EXPLOIT_PUBLIC_APP = "T1190";
+    public static final String VULNERABILITY_SCANNING = "T1595.002";
 
     private static final Map<String, String> NAMES = Map.ofEntries(
             entry(BRUTE_FORCE, "Brute Force"),
@@ -42,7 +43,8 @@ public final class Mitre {
             entry(CRON, "Scheduled Task/Job: Cron"),
             entry(WEB_SHELL, "Server Software Component: Web Shell"),
             entry(FILE_DELETION, "Indicator Removal: File Deletion"),
-            entry(EXPLOIT_PUBLIC_APP, "Exploit Public-Facing Application"));
+            entry(EXPLOIT_PUBLIC_APP, "Exploit Public-Facing Application"),
+            entry(VULNERABILITY_SCANNING, "Active Scanning: Vulnerability Scanning"));
 
     private Mitre() {
     }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -46,41 +47,75 @@ type ProcessMonitor struct {
 	Interval time.Duration
 	Emit     func(event.Event)
 
-	seen map[string]bool
+	seen    map[string]bool
+	exposed map[int]bool // pids listening on a public address, from the last scan
 }
+
+// execSeen is a process caught by the kernel the moment it called exec, with its parent.
+type execSeen struct{ proc, parent ProcInfo }
 
 func (m *ProcessMonitor) Run(ctx context.Context) {
 	m.seen = map[string]bool{}
 	self := os.Getpid()
+
+	// The kernel's process connector reports every exec as it happens, so a malicious
+	// binary that runs for half a second is still caught. The periodic scan stays: it covers
+	// processes started before the agent and hosts where the connector is unavailable.
+	execs := make(chan execSeen, 256)
+	if err := watchExecs(ctx, func(pid int) {
+		p, ok := ReadProcess(pid)
+		if !ok || p.PID == self {
+			return
+		}
+		parent, _ := ReadProcess(p.PPID)
+		select {
+		case execs <- execSeen{p, parent}:
+		default: // flood of execs: the periodic scan still sees the ones that stay alive
+		}
+	}); err != nil {
+		log.Printf("process monitor: exec events unavailable, scanning every %s only: %v", m.Interval, err)
+	}
+
 	ticker := time.NewTicker(m.Interval)
 	defer ticker.Stop()
 	for {
 		m.scan(self)
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
+	wait:
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				break wait
+			case x := <-execs:
+				m.check(x.proc, x.parent, m.exposed[x.proc.PPID], time.Now(), m.seen)
+			}
 		}
+	}
+}
+
+// check emits one event per new reason the process is suspicious and records it in seen.
+func (m *ProcessMonitor) check(p, parent ProcInfo, parentExposed bool, ts time.Time, seen map[string]bool) {
+	for _, reason := range ClassifyProcess(p, parent, parentExposed) {
+		key := fmt.Sprintf("%d/%d/%s", p.PID, p.StartTime, reason)
+		if !m.seen[key] {
+			m.Emit(processEvent(p, parent, reason, ts))
+		}
+		seen[key] = true
 	}
 }
 
 func (m *ProcessMonitor) scan(self int) {
 	procs := ListProcesses()
 	exposed := PublicListenerPIDs()
+	m.exposed = exposed
 	alive := map[string]bool{}
 	ts := time.Now()
 	for _, p := range procs {
 		if p.PID == self {
 			continue
 		}
-		parent := procs[p.PPID]
-		for _, reason := range ClassifyProcess(p, parent, exposed[p.PPID]) {
-			key := fmt.Sprintf("%d/%d/%s", p.PID, p.StartTime, reason)
-			alive[key] = true
-			if !m.seen[key] {
-				m.Emit(processEvent(p, parent, reason, ts))
-			}
-		}
+		m.check(p, procs[p.PPID], exposed[p.PPID], ts, alive)
 	}
 	m.seen = alive // forget processes that exited
 }
@@ -154,28 +189,36 @@ func ListProcesses() map[int]ProcInfo {
 		if err != nil {
 			continue
 		}
-		stat, err := os.ReadFile(dir + "/stat")
-		if err != nil {
-			continue // exited
+		if p, ok := ReadProcess(pid); ok {
+			out[pid] = p
 		}
-		comm, ppid, start, ok := ParseProcStat(string(stat))
-		if !ok {
-			continue
-		}
-		p := ProcInfo{PID: pid, PPID: ppid, StartTime: start, Comm: comm}
-		p.Exe, _ = os.Readlink(dir + "/exe") // empty for kernel threads
-		if status, err := os.ReadFile(dir + "/status"); err == nil {
-			p.UID = ParseStatusUID(string(status))
-			if p.UID != "" {
-				p.User = lookupUser(p.UID)
-			}
-		}
-		if cmd, err := os.ReadFile(dir + "/cmdline"); err == nil {
-			p.Cmdline = truncate(string(bytes.TrimRight(bytes.ReplaceAll(cmd, []byte{0}, []byte{' '}), " ")), 512)
-		}
-		out[pid] = p
 	}
 	return out
+}
+
+// ReadProcess reads one process from /proc (false if it already exited).
+func ReadProcess(pid int) (ProcInfo, bool) {
+	dir := "/proc/" + strconv.Itoa(pid)
+	stat, err := os.ReadFile(dir + "/stat")
+	if err != nil {
+		return ProcInfo{}, false // exited
+	}
+	comm, ppid, start, ok := ParseProcStat(string(stat))
+	if !ok {
+		return ProcInfo{}, false
+	}
+	p := ProcInfo{PID: pid, PPID: ppid, StartTime: start, Comm: comm}
+	p.Exe, _ = os.Readlink(dir + "/exe") // empty for kernel threads
+	if status, err := os.ReadFile(dir + "/status"); err == nil {
+		p.UID = ParseStatusUID(string(status))
+		if p.UID != "" {
+			p.User = lookupUser(p.UID)
+		}
+	}
+	if cmd, err := os.ReadFile(dir + "/cmdline"); err == nil {
+		p.Cmdline = truncate(string(bytes.TrimRight(bytes.ReplaceAll(cmd, []byte{0}, []byte{' '}), " ")), 512)
+	}
+	return p, true
 }
 
 // ParseProcStat extracts comm, ppid and starttime from /proc/<pid>/stat.

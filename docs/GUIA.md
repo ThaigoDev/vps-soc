@@ -307,6 +307,12 @@ Do lado da VPS, o agente:
   processos filhos do PM2 a cada segundo (leitura barata do `/proc`) e só chama o `pm2 jlist`
   quando algo mudou;
 - confere os serviços systemd em falha a cada 2 s (antes: a cada 5 min);
+- é avisado pelo kernel na hora em que um arquivo crítico muda (`sudoers`, `authorized_keys`,
+  `sshd_config`...) e quando qualquer programa é executado, então até um malware que roda por meio
+  segundo em `/tmp` aparece;
+- lê os logs de acesso do nginx e avisa quando um IP tenta SQL injection, path traversal,
+  Log4Shell etc. nos seus sites;
+- guarda em disco os eventos que não conseguiu enviar (SOC desligado), e manda tudo quando volta;
 - quando um serviço cai ou volta, ou depois de executar uma ação (ex.: reiniciar pelo SOC), manda
   o sinal de vida **na mesma hora** com o estado novo, então o incidente abre/fecha e o painel
   atualiza em 1–2 s, sem esperar o próximo ciclo;

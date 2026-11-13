@@ -10,6 +10,8 @@ import java.util.List;
 public record SocProperties(
         String agentToken,
         String dashboardToken,
+        // "host=token,host2=token2": a token that only works for that host id (optional)
+        String agentHostTokens,
         Retention retention,
         Detection detection,
         Telegram telegram,
@@ -28,7 +30,9 @@ public record SocProperties(
             Duration correlationWindow,
             double diskUsagePercent,
             int offlineMissedHeartbeats,
-            List<String> trustedSshSources) {
+            List<String> trustedSshSources,
+            int slowBruteForceThreshold,
+            Duration slowBruteForceWindow) {
 
         /** Source IPs whose SSH logins are expected (e.g. the hosting provider's web console). */
         public boolean trustedSshSource(String ip) {
@@ -47,6 +51,7 @@ public record SocProperties(
             Policy diskCleanup,
             Policy restartService,
             Policy restartPm2,
+            Policy blockWebAttack,
             Duration bruteForceBlockTtl,
             Duration compromiseBlockTtl,
             double serviceMemoryPercent,

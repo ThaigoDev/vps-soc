@@ -28,6 +28,7 @@ public final class RuleIds {
     public static final String SERVICE_DEBUG_EXPOSED = "SERVICE_DEBUG_EXPOSED";
     public static final String SERVICE_NOT_RESPONDING = "SERVICE_NOT_RESPONDING";
     public static final String CERT_EXPIRING = "CERT_EXPIRING";
+    public static final String WEB_ATTACK = "WEB_ATTACK";
 
     private RuleIds() {
     }

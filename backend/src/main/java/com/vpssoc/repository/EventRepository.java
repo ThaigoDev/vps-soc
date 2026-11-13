@@ -15,6 +15,9 @@ import java.util.List;
 
 public interface EventRepository extends JpaRepository<SecurityEvent, Long>, JpaSpecificationExecutor<SecurityEvent> {
 
+    List<SecurityEvent> findByHostIdAndSourceIpAndTypeAndOccurredAtBetween(
+            String hostId, String sourceIp, EventType type, Instant from, Instant to);
+
     long countByHostIdAndSourceIpAndTypeInAndOccurredAtBetween(
             String hostId, String sourceIp, Collection<EventType> types, Instant from, Instant to);
 

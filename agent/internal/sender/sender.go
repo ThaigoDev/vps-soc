@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"vps-soc/agent/internal/event"
+	"vps-soc/agent/internal/state"
 )
 
 const (
@@ -32,6 +33,12 @@ type Sender struct {
 	DryRun    bool
 	// OnDelivered receives the journald cursor of the last delivered event.
 	OnDelivered func(cursor string)
+	// Spool, when set, keeps undelivered events on disk while the SOC is unreachable, so an
+	// agent restart (or a reboot of the VPS) does not lose them.
+	Spool *state.Store
+
+	spooled   bool      // the spool file holds events not yet delivered
+	spooledAt time.Time // last write of the spool
 
 	client     *http.Client
 	pollClient *http.Client
@@ -59,7 +66,53 @@ func (s *Sender) Enqueue(e event.Event) {
 	}
 }
 
+const spoolFile = "pending-events.json"
+
+// spoolEvery limits how often the buffer is rewritten to disk while the SOC is down.
+const spoolEvery = 30 * time.Second
+
+// loadSpool puts the events saved by a previous run back in the buffer.
+func (s *Sender) loadSpool() {
+	if s.Spool == nil {
+		return
+	}
+	var saved []event.Event
+	found, err := s.Spool.LoadJSON(spoolFile, &saved)
+	if err != nil {
+		log.Printf("spool unreadable, ignored: %v", err)
+		return
+	}
+	if found && len(saved) > 0 {
+		log.Printf("%d undelivered events recovered from disk", len(saved))
+		for _, e := range saved {
+			s.add(e)
+		}
+		s.spooled = true
+	}
+}
+
+// saveSpool writes the undelivered events to disk. Events read from journald are left out:
+// the journal cursor is only saved after delivery, so those are read again on restart.
+func (s *Sender) saveSpool() {
+	if s.Spool == nil || (len(s.buf) == 0 && !s.spooled) {
+		return
+	}
+	keep := make([]event.Event, 0, len(s.buf))
+	for _, e := range s.buf {
+		if e.Cursor == "" {
+			keep = append(keep, e)
+		}
+	}
+	if err := s.Spool.SaveJSON(spoolFile, keep); err != nil {
+		log.Printf("save spool: %v", err)
+		return
+	}
+	s.spooled = len(keep) > 0
+	s.spooledAt = time.Now()
+}
+
 func (s *Sender) Run(ctx context.Context) {
+	s.loadSpool()
 	ticker := time.NewTicker(flushEvery)
 	defer ticker.Stop()
 	backoff := time.Duration(0)
@@ -83,6 +136,7 @@ func (s *Sender) Run(ctx context.Context) {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			s.flush(shutdownCtx)
 			cancel()
+			s.saveSpool() // whatever could not be delivered survives the restart
 			return
 		}
 
@@ -94,8 +148,14 @@ func (s *Sender) Run(ctx context.Context) {
 			backoff = min(max(backoff*2, 2*time.Second), 2*time.Minute)
 			nextTry = time.Now().Add(backoff)
 			log.Printf("delivery failed (%d buffered, retry in %s): %v", len(s.buf), backoff, err)
+			if time.Since(s.spooledAt) >= spoolEvery {
+				s.saveSpool() // survives a crash or reboot, not only a clean stop
+			}
 		} else {
 			backoff = 0
+			if s.spooled {
+				s.saveSpool() // everything delivered: empty the spool
+			}
 		}
 	}
 }

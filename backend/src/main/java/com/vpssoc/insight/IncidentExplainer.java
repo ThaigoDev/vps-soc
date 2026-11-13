@@ -64,6 +64,7 @@ public class IncidentExplainer {
                  RuleIds.SERVICE_NOT_RESPONDING, RuleIds.SERVICE_DEBUG_EXPOSED -> pm2(c, s, b);
             case RuleIds.SERVICE_VULNERABLE -> vulnerable(c, b);
             case RuleIds.CERT_EXPIRING -> certificate(c, b);
+            case RuleIds.WEB_ATTACK -> webAttack(c, s, b);
             default -> b.summary = Objects.toString(i.getDescription(), i.getTitle());
         }
         if (i.getService() != null && b.facts.stream().noneMatch(f -> f.label().equals("App PM2"))) {
@@ -216,6 +217,34 @@ public class IncidentExplainer {
         b.step("Ver de onde a conta está logada", "Se for www-data ou outra conta de serviço, a origem é a aplicação web: confira os logs dela.",
                 "who; sudo ps -u %s -o pid,ppid,etime,cmd".formatted(i.getUsername()));
         b.falsePositive = "Normal se foi você esquecendo de que a conta não tem sudo ou errando a senha.";
+    }
+
+    // ---------------------------------------------------------------- web
+
+    private void webAttack(Context c, Stats s, Builder b) {
+        Incident i = c.incident();
+        SecurityEvent e = s.latest(EventType.WEB_ATTACK);
+        String tool = e == null ? null : Objects.toString(e.meta("tool"), null);
+        b.summary = "O IP %s mandou para os sites deste servidor requisições feitas para explorar falhas da aplicação: %s"
+                .formatted(i.getSourceIp(), Objects.toString(i.getDescription(), i.getTitle()));
+        b.impact = "Ninguém entrou só por isso: é uma tentativa. O risco real depende da aplicação ter a falha que está sendo testada. "
+                + "Se alguma dessas requisições funcionou, o próximo sinal costuma ser um shell aberto pelo servidor web (incidente Web shell) "
+                + "ou um processo estranho rodando como o usuário do site.";
+        b.fact("IP", i.getSourceIp());
+        b.fact("Lotes de requisições", String.valueOf(s.count(EventType.WEB_ATTACK)));
+        if (tool != null && !tool.isBlank()) {
+            b.fact("Ferramenta", tool);
+        }
+        if (e != null && e.meta("userAgent") != null) {
+            b.fact("User-Agent", String.valueOf(e.meta("userAgent")));
+        }
+        b.step("Ver tudo o que esse IP pediu aos sites", "Procure respostas 200 com tamanho grande em rotas atacadas: indicam que a aplicação devolveu algo.",
+                "sudo grep -h '^%s ' /var/log/nginx/*access*.log | tail -50".formatted(i.getSourceIp()));
+        b.step("Conferir se nada estranho rodou depois", "Shell ou processo novo sob o usuário do site (www-data, node) é sinal de que o ataque funcionou.",
+                "ps -eo pid,ppid,user,etime,cmd --sort=-start_time | head -20");
+        b.step("Bloquear o IP", "O SOC propõe o bloqueio na aba Resposta; aprove se o IP não for de um serviço seu (monitoramento, CDN).", null);
+        b.falsePositive = "Possível quando um teste de segurança seu (ou um serviço de monitoramento) varre o site, ou quando um formulário legítimo "
+                + "aceita texto com aspas e palavras como SELECT. Se o IP for seu, marque como falso positivo.";
     }
 
     // ---------------------------------------------------------------- network / files / processes
