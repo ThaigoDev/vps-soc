@@ -73,19 +73,6 @@ public class Host {
     public String getManualIp() { return manualIp; }
     public void setManualIp(String manualIp) { this.manualIp = manualIp; }
 
-    /** The address used to place the server on the map, and where it came from. */
-    public String locationIp() {
-        if (manualIp != null) return manualIp;
-        if (publicIp != null) return publicIp;
-        return lastIp;
-    }
-
-    public String locationSource() {
-        if (manualIp != null) return "MANUAL";
-        if (publicIp != null) return "AGENT";
-        return "CONNECTION";
-    }
-
     public HostStatus getStatus() { return status; }
     public void setStatus(HostStatus status) { this.status = status; }
     public int getHeartbeatIntervalSeconds() { return heartbeatIntervalSeconds; }

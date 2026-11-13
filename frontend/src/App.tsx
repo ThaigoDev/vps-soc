@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Suspense, lazy, useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { getToken, setToken, UnauthorizedError } from './api'
 import { AlertProvider, EmergencyBanner } from './components/Alerts'
@@ -17,9 +17,13 @@ import Reports from './pages/Reports'
 import Help from './pages/Help'
 import ClientReport from './pages/ClientReport'
 
+// Heavy (three.js) and public: loaded only when opened, no login needed.
+const Presentation = lazy(() => import('./pages/Presentation'))
+
 export default function App() {
   const [authed, setAuthed] = useState(() => !!getToken())
   const queryClient = useQueryClient()
+  const { pathname } = useLocation()
 
   // Any 401 from the API sends the user back to the login screen.
   useEffect(() => {
@@ -27,6 +31,14 @@ export default function App() {
       if (e.type === 'updated' && e.query.state.error instanceof UnauthorizedError) setAuthed(false)
     })
   }, [queryClient])
+
+  if (pathname === '/apresentacao') {
+    return (
+      <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-sm text-muted">Carregando apresentação…</div>}>
+        <Presentation />
+      </Suspense>
+    )
+  }
 
   if (!authed) return <Login onLogin={() => setAuthed(true)} />
 

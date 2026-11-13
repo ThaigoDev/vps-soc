@@ -25,7 +25,7 @@ public class MapController {
         }
     }
 
-    /** {@code ipSource}: MANUAL (set in the dashboard), AGENT (reported by the server) or CONNECTION (address it connects from). */
+    /** {@code ipSource}: ENV (SOC_SERVER_PUBLIC_IP), MANUAL (set in the dashboard), AGENT (reported by the server) or CONNECTION (address it connects from). */
     public record MapServer(String hostId, HostStatus status, String ip, String ipSource, boolean publicIp, GeoView geo) {
     }
 
@@ -47,8 +47,11 @@ public class MapController {
     private final IpBlockRepository blocks;
     private final GeoService geo;
     private final Clock clock;
+    private final ServerLocations locations;
 
-    public MapController(HostRepository hosts, DashboardService dashboard, IpBlockRepository blocks, GeoService geo, Clock clock) {
+    public MapController(HostRepository hosts, DashboardService dashboard, IpBlockRepository blocks, GeoService geo, Clock clock,
+                         ServerLocations locations) {
+        this.locations = locations;
         this.hosts = hosts;
         this.dashboard = dashboard;
         this.blocks = blocks;
@@ -64,13 +67,14 @@ public class MapController {
         Set<String> blocked = blocks.findAllActive(clock.instant()).stream().map(b -> b.getIp()).collect(Collectors.toSet());
 
         List<String> ips = new ArrayList<>();
-        all.forEach(x -> ips.add(x.locationIp()));
+        all.forEach(x -> ips.add(locations.resolve(x).ip()));
         top.forEach(t -> ips.add(t.ip()));
         Map<String, IpGeo> found = geo.locate(ips);
 
         List<MapServer> servers = all.stream().map(x -> {
-            String ip = x.locationIp();
-            return new MapServer(x.getId(), x.getStatus(), ip, x.locationSource(),
+            var r = locations.resolve(x);
+            String ip = r.ip();
+            return new MapServer(x.getId(), x.getStatus(), ip, r.source(),
                     ip != null && IpClassifier.kind(ip) == IpClassifier.Kind.PUBLIC, GeoView.of(found.get(ip)));
         }).toList();
 
@@ -111,9 +115,10 @@ public class MapController {
         } else {
             host.setManualIp(ip);
         }
-        String loc = host.locationIp();
+        var r = locations.resolve(host);
+        String loc = r.ip();
         IpGeo g = loc == null ? null : geo.locate(List.of(loc)).get(loc);
-        return new MapServer(host.getId(), host.getStatus(), loc, host.locationSource(),
+        return new MapServer(host.getId(), host.getStatus(), loc, r.source(),
                 loc != null && IpClassifier.kind(loc) == IpClassifier.Kind.PUBLIC, GeoView.of(g));
     }
 }

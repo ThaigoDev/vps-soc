@@ -172,24 +172,40 @@ atacaram. Passe o mouse em um ponto para ver o IP, a cidade e o provedor.
 
 ![Mapa de servidores e ataques](img/mapa.png)
 
-**Caminho da internet até as aplicações.** Um diagrama de fluxo, da esquerda para a direita,
-com o caminho que um acesso faz: *Internet → Firewall → Servidor → Entradas (domínios e portas
-abertas) → Aplicações*. Cada caixa tem a cor do seu estado (verde funciona, amarelo atenção,
-vermelho problema), e as linhas até uma caixa quebrada ficam vermelhas e tracejadas. Acima do
-desenho vem a lista do que está errado, em português. Clique numa caixa para abrir os detalhes.
-O mesmo diagrama aparece na página **Aplicações**.
+**Arquitetura em 3D.** Um modelo 3D do caminho que um acesso faz, da internet até as
+aplicações: *Internet (globo) → Firewall (parede) → Servidor (caixa) → Entradas (portais: domínios
+e portas abertas) → Aplicações (cubos)*. Cada peça fica sobre um anel com a cor do seu estado
+(verde funciona, amarelo atenção, vermelho problema). Pontinhos azuis andam pelas linhas como se
+fossem o tráfego; numa peça quebrada eles ficam vermelhos e somem antes de chegar.
 
-![Fluxo da infraestrutura](img/fluxo.png)
+- **Arraste** para girar, **role** para aproximar e **clique** numa peça para ver o que ela é,
+  o problema e o botão **Abrir detalhes**.
+- **Girar** liga a rotação automática; **Recentralizar** volta para a visão inicial.
+- Acima do modelo vem a lista do que está errado, em português.
+
+O mesmo modelo aparece na página **Aplicações**.
+
+![Arquitetura em 3D](img/arquitetura-3d.png)
 
 **Ficha do servidor.** CPU, memória, disco, rede, quem está logado, portas abertas e um
 **checklist de segurança** (SSH só com chave, sem login root por senha, atualizações em dia…).
 
-> **Como o SOC sabe onde fica o servidor e os atacantes?** Ele consulta a localização
-> aproximada de cada IP público num serviço gratuito (ipwho.is), enviando só o endereço IP,
-> e guarda a resposta para não perguntar de novo. O agente a partir desta versão informa o
-> IP público da VPS sozinho. Com um agente antigo, o mapa mostra um campo “Onde fica…?” para
-> você digitar o IP público (o que aparece no painel da hospedagem). Para desligar a
-> consulta, use `SOC_GEOIP_ENABLED=false` no `.env`.
+> **Como colocar o servidor no mapa:** escreva o IP público da VPS no `.env` do SOC (é o IP que
+> aparece no painel da hospedagem, ou na tela de boas-vindas quando você entra na VPS) e rode
+> `docker compose up -d`:
+>
+> ```
+> SOC_SERVER_PUBLIC_IP=82.25.79.73
+> ```
+>
+> Com mais de um servidor, use `nome=ip` separados por vírgula:
+> `SOC_SERVER_PUBLIC_IP=srv731680=82.25.79.73,web2=203.0.113.9`. Sem essa linha, o SOC usa o
+> IP que o agente informa (versões novas do agente fazem isso sozinhas) ou o campo
+> “Onde fica…?” que aparece no próprio mapa.
+>
+> **Como o SOC sabe onde ficam os IPs?** Ele consulta a localização aproximada de cada IP
+> público num serviço gratuito (ipwho.is), enviando só o endereço, e guarda a resposta para não
+> perguntar de novo. Para desligar, use `SOC_GEOIP_ENABLED=false` no `.env`.
 
 ### Aplicações
 
@@ -231,6 +247,25 @@ Clique em **Imprimir / salvar PDF**: o relatório sai em fundo branco, sem o men
 anexar num e-mail. Também dá para chegar nele pelo botão em **Relatórios**.
 
 ![Relatório do cliente](img/relatorio-cliente.png)
+
+### Apresentação do projeto
+
+Uma página de apresentação com **scroll-telling**: um modelo 3D do sistema inteiro fica ao
+fundo e, conforme você rola, a câmera passeia pela parte de que o texto fala. A sequência é:
+
+1. o problema (robôs atacando a VPS);
+2. o agente;
+3. o túnel seguro;
+4. a detecção;
+5. a resposta automática, com o firewall bloqueando o atacante;
+6. o painel e o alerta no celular;
+7. a arquitetura 3D das aplicações.
+
+Abra em **`/apresentacao`** (por exemplo `http://localhost:8088/apresentacao`). Ela **não pede
+login** e usa dados de demonstração, então dá para projetar numa aula ou mandar o link. Também
+há um atalho no menu lateral (**Apresentação do projeto**) e na tela de login.
+
+![Apresentação](img/apresentacao.png)
 
 ### Ajuda e glossário
 

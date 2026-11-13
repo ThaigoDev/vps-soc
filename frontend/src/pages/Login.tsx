@@ -53,6 +53,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         >
           {busy ? 'Verificando…' : 'Entrar'}
         </button>
+        <a href="/apresentacao" className="mt-4 block text-center text-sm text-hud hover:underline">Ver a apresentação do projeto</a>
       </form>
     </div>
   )

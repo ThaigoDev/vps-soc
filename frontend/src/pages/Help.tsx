@@ -8,7 +8,7 @@ const pages: { to: string; Icon: typeof Siren; title: string; text: string }[] =
   { to: '/', Icon: LayoutDashboard, title: 'Visão geral', text: 'Resumo de tudo. Diz se está tudo bem e, se não estiver, o que precisa de você.' },
   { to: '/incidents', Icon: Siren, title: 'Incidentes', text: 'Problemas detectados que precisam de análise. Cada um explica o que aconteceu e o que fazer.' },
   { to: '/events', Icon: Activity, title: 'Eventos', text: 'O registro bruto de tudo que o agente viu. Útil para investigar um IP ou usuário.' },
-  { to: '/hosts', Icon: Server, title: 'Servidores', text: 'Mapa-múndi com servidores e origem dos ataques, o caminho da internet até as aplicações e a ficha de cada VPS.' },
+  { to: '/hosts', Icon: Server, title: 'Servidores', text: 'Mapa-múndi com servidores e origem dos ataques, a arquitetura em 3D (gire e clique nas peças) e a ficha de cada VPS.' },
   { to: '/services', Icon: Boxes, title: 'Aplicações', text: 'Apps Node.js rodando no PM2: se estão no ar e se têm dependências vulneráveis.' },
   { to: '/response', Icon: ShieldCheck, title: 'Resposta automática', text: 'Ações de defesa (bloquear IP, matar processo). Aqui você aprova as que esperam por você.' },
   { to: '/reports', Icon: BarChart3, title: 'Relatórios', text: 'Métricas do SOC ao longo do tempo e o mapa MITRE ATT&CK.' },

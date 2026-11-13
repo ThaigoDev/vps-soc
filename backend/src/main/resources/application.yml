@@ -76,3 +76,5 @@ soc:
   geoip:
     enabled: ${SOC_GEOIP_ENABLED:true}
     url: ${SOC_GEOIP_URL:https://ipwho.is/{ip}}
+    # Public IP of the server(s) for the map: "82.25.79.73" or "srv731680=82.25.79.73,web2=1.2.3.4"
+    server-public-ip: ${SOC_SERVER_PUBLIC_IP:}
