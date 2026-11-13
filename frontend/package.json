@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:presentation": "vite build --config vite.presentation.config.ts && node scripts/inline-presentation.mjs"
   },
   "dependencies": {
     "@react-three/drei": "9.122.0",

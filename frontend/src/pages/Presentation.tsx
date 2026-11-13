@@ -91,7 +91,8 @@ const chapters: Chapter[] = [
   },
 ]
 
-export default function Presentation() {
+/** {@code standalone}: the offline single-file build, without links into the dashboard. */
+export default function Presentation({ standalone = false }: { standalone?: boolean }) {
   const [step, setStep] = useState(0)
   const refs = useRef<(HTMLElement | null)[]>([])
   const [progress, setProgress] = useState(0)
@@ -139,9 +140,11 @@ export default function Presentation() {
       {/* Top bar */}
       <header className="fixed inset-x-0 top-0 z-20 flex items-center gap-3 px-5 py-4">
         <span className="flex items-center gap-2 font-semibold"><Shield size={20} className="text-hud" aria-hidden /> VPS-SOC</span>
-        <div className="ml-auto flex items-center gap-2">
-          <Link to="/" className="rounded-lg border border-line bg-surface/80 px-3 py-1.5 text-sm backdrop-blur hover:bg-raised">Abrir o painel</Link>
-        </div>
+        {!standalone && (
+          <div className="ml-auto flex items-center gap-2">
+            <Link to="/" className="rounded-lg border border-line bg-surface/80 px-3 py-1.5 text-sm backdrop-blur hover:bg-raised">Abrir o painel</Link>
+          </div>
+        )}
       </header>
       <div className="fixed inset-x-0 top-0 z-30 h-0.5 bg-transparent">
         <div className="h-full bg-[var(--hud)]" style={{ width: `${progress * 100}%` }} />
@@ -172,9 +175,11 @@ export default function Presentation() {
               )}
               {i === chapters.length - 1 && (
                 <div className="mt-6 flex flex-wrap gap-2">
-                  <Link to="/" className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-sm font-semibold text-white hover:brightness-110">
-                    Abrir o painel <ArrowRight size={15} aria-hidden />
-                  </Link>
+                  {!standalone && (
+                    <Link to="/" className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-sm font-semibold text-white hover:brightness-110">
+                      Abrir o painel <ArrowRight size={15} aria-hidden />
+                    </Link>
+                  )}
                   <a href="https://github.com/ThaigoDev/vps-soc/blob/main/docs/GUIA.md" target="_blank" rel="noreferrer"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-sm hover:bg-raised">
                     <BookOpen size={15} aria-hidden /> Guia do projeto

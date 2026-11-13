@@ -267,6 +267,16 @@ há um atalho no menu lateral (**Apresentação do projeto**) e na tela de login
 
 ![Apresentação](img/apresentacao.png)
 
+**Versão em arquivo único (para levar a outro PC).** O arquivo
+[`docs/apresentacao/VPS-SOC-apresentacao.html`](apresentacao/VPS-SOC-apresentacao.html) tem
+tudo dentro: textos, 3D e estilo. Baixe, dê dois cliques e ele abre no navegador, **sem
+internet, sem Docker e sem login**. No GitHub, abra o arquivo e clique em *Download raw file*.
+Para gerar de novo depois de mudar a apresentação:
+
+```bash
+cd frontend && npm run build:presentation
+```
+
 ### Ajuda e glossário
 
 Dentro do próprio painel: a rotina em 3 passos, o que tem em cada página, glossário e
