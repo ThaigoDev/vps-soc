@@ -12,16 +12,17 @@ type Backend interface {
 	ReportAction(ctx context.Context, id int64, result any) error
 }
 
-// Poll fetches queued actions from the SOC every interval, runs them one by one and
-// reports each result. While the backend is unreachable it just keeps trying.
+// Poll asks the SOC for queued actions, runs them one by one and reports each result.
+// The SOC holds the request open until there is something to do (long polling), so the
+// loop asks again right away; it only pauses after an error, or when an old SOC answers
+// immediately with nothing (then it falls back to asking every interval).
 func Poll(ctx context.Context, b Backend, x *Executor, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 	for {
 		var resp struct {
 			Actions []Action `json:"actions"`
 		}
-		pctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		started := time.Now()
+		pctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		err := b.PollActions(pctx, &resp)
 		cancel()
 		if err == nil {
@@ -37,10 +38,14 @@ func Poll(ctx context.Context, b Backend, x *Executor, interval time.Duration) {
 				cancel()
 			}
 		}
+		pause := time.Duration(0)
+		if err != nil || (len(resp.Actions) == 0 && time.Since(started) < time.Second) {
+			pause = interval
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-time.After(pause):
 		}
 	}
 }

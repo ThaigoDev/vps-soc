@@ -117,6 +117,14 @@ public class ResponseAction {
         completedAt = now;
     }
 
+    /** The hand-over to the agent did not happen (its request was already answered). */
+    public void undispatch() {
+        if (status == Status.SENT) {
+            status = Status.PENDING;
+            dispatchedAt = null;
+        }
+    }
+
     public void dispatch(Instant now) {
         status = Status.SENT;
         dispatchedAt = now;

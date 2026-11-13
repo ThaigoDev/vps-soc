@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { getToken, setToken, UnauthorizedError } from './api'
 import { AlertProvider, EmergencyBanner } from './components/Alerts'
 import { Shell } from './components/Layout'
+import { useLiveUpdates } from './live'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
 import Incidents from './pages/Incidents'
@@ -24,6 +25,7 @@ export default function App() {
   const [authed, setAuthed] = useState(() => !!getToken())
   const queryClient = useQueryClient()
   const { pathname } = useLocation()
+  useLiveUpdates(authed && pathname !== '/apresentacao')
 
   // Any 401 from the API sends the user back to the login screen.
   useEffect(() => {

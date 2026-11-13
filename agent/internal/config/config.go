@@ -47,19 +47,19 @@ func Load() (Config, error) {
 		StateDir:    env("SOC_STATE_DIR", "/var/lib/vps-soc-agent"),
 	}
 	var err error
-	if c.HeartbeatInterval, err = duration("SOC_HEARTBEAT_INTERVAL", 30*time.Second); err != nil {
+	if c.HeartbeatInterval, err = duration("SOC_HEARTBEAT_INTERVAL", 15*time.Second); err != nil {
 		return c, err
 	}
-	if c.PortScanInterval, err = duration("SOC_PORT_SCAN_INTERVAL", 30*time.Second); err != nil {
+	if c.PortScanInterval, err = duration("SOC_PORT_SCAN_INTERVAL", 10*time.Second); err != nil {
 		return c, err
 	}
-	if c.FIMInterval, err = duration("SOC_FIM_INTERVAL", 60*time.Second); err != nil {
+	if c.FIMInterval, err = duration("SOC_FIM_INTERVAL", 15*time.Second); err != nil {
 		return c, err
 	}
-	if c.ProcScanInterval, err = duration("SOC_PROCESS_SCAN_INTERVAL", 15*time.Second); err != nil {
+	if c.ProcScanInterval, err = duration("SOC_PROCESS_SCAN_INTERVAL", 5*time.Second); err != nil {
 		return c, err
 	}
-	if c.PM2Interval, err = duration("SOC_PM2_INTERVAL", 30*time.Second); err != nil {
+	if c.PM2Interval, err = duration("SOC_PM2_INTERVAL", 15*time.Second); err != nil {
 		return c, err
 	}
 	c.AllowInsecureHTTP = os.Getenv("SOC_ALLOW_INSECURE_HTTP") == "true"

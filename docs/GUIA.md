@@ -289,6 +289,27 @@ cd frontend && npm run build:presentation
 Dentro do próprio painel: a rotina em 3 passos, o que tem em cada página, glossário e
 problemas comuns.
 
+### Tempo real
+
+O painel fica **ao vivo**: o servidor do SOC avisa o navegador no instante em que algo muda
+(Server-Sent Events), e o painel atualiza só o que mudou. Um ataque grave vira alarme na tela
+em menos de meio segundo depois de chegar ao SOC. O indicador no topo mostra **Ao vivo** (verde)
+quando essa conexão está aberta; se ela cair, o painel continua se atualizando a cada poucos
+segundos e reconecta sozinho.
+
+Do lado da VPS, o agente:
+
+- envia cada evento na hora (junta só o que chega em 0,15 s, para um ataque em rajada ir num
+  envio só);
+- deixa uma conexão aberta esperando ordens (*long polling*): quando o SOC decide bloquear um IP,
+  a ordem chega ao agente em milissegundos;
+- confere portas a cada 10 s, processos a cada 5 s e arquivos críticos a cada 15 s, e manda
+  sinal de vida a cada 15 s (servidor parado vira alerta em cerca de 45 s).
+
+> Essas melhorias do agente valem depois de **atualizar o agente na VPS** (seção *Instalando o
+> agente na VPS* do README). Com o agente antigo tudo continua funcionando, só que as ordens
+> chegam a cada 5 s, como antes.
+
 ### Alertas e tema
 
 No canto superior direito:

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { api, type Host, type ServiceView, type Summary } from '../api'
 import { AlertMenu, useAlertSettings } from './Alerts'
+import { useLiveState } from '../live'
 import { useKpis } from './SocMetrics'
 import { threatLevel } from './ui'
 
@@ -211,10 +212,11 @@ function Sidebar({ onLogout }: { onLogout: () => void }) {
   )
 }
 
-/** Green while the API answers; red when the last refresh failed. */
+/** "Ao vivo" while the live stream is open; otherwise says the data refreshes on a timer. */
 function LinkStatus() {
   const fetching = useIsFetching()
   const q = useQuery({ queryKey: ['summary'], queryFn: () => api<Summary>('/dashboard/summary'), refetchInterval: 10_000 })
+  const live = useLiveState()
   const down = q.isError
   const { play } = useAlertSettings()
   const wasDown = useRef(false)
@@ -222,11 +224,17 @@ function LinkStatus() {
     if (down && !wasDown.current) play('linkLost') // the backend stopped answering
     wasDown.current = down
   }, [down, play])
+  const label = down ? 'Sem conexão' : live === 'live' ? 'Ao vivo' : fetching ? 'Atualizando…' : 'Atualiza a cada 10 s'
+  const title = down
+    ? 'O painel não consegue falar com o backend. Os dados podem estar desatualizados.'
+    : live === 'live'
+      ? 'Conectado em tempo real: incidentes, ações e eventos aparecem no instante em que acontecem.'
+      : 'Sem conexão em tempo real no momento; o painel se atualiza sozinho a cada poucos segundos.'
+  const color = down ? 'var(--critical)' : live === 'live' ? 'var(--good)' : 'var(--warning)'
   return (
-    <span className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs sm:flex ${down ? 'border-critical text-critical' : 'border-line text-ink2'}`}
-      title={down ? 'O painel não consegue falar com o backend. Os dados podem estar desatualizados.' : 'Conectado ao backend; os dados se atualizam sozinhos.'}>
-      <span className={`inline-block h-2 w-2 rounded-full ${down ? '' : 'live-dot'}`} style={{ background: down ? 'var(--critical)' : 'var(--good)' }} aria-hidden />
-      {down ? 'Sem conexão' : fetching ? 'Atualizando…' : 'Ao vivo'}
+    <span className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs sm:flex ${down ? 'border-critical text-critical' : 'border-line text-ink2'}`} title={title}>
+      <span className={`inline-block h-2 w-2 rounded-full ${live === 'live' && !down ? 'live-dot' : ''}`} style={{ background: color }} aria-hidden />
+      {label}
     </span>
   )
 }

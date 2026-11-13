@@ -122,6 +122,7 @@ public class IncidentService {
             }
         }
         inc.changeStatus(status, note, clock.instant());
+        publisher.publishEvent(new com.vpssoc.live.LiveUpdate("incidents", inc.getHostId()));
         return inc;
     }
 

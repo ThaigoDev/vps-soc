@@ -20,6 +20,9 @@ const (
 	maxBuffer  = 10_000
 	batchSize  = 500
 	flushEvery = 2 * time.Second
+	// After an event arrives, wait this long for others before sending, so a burst
+	// (e.g. a brute force) goes in one request but a single event still leaves at once.
+	coalesce = 150 * time.Millisecond
 )
 
 type Sender struct {
@@ -30,17 +33,20 @@ type Sender struct {
 	// OnDelivered receives the journald cursor of the last delivered event.
 	OnDelivered func(cursor string)
 
-	client  *http.Client
-	queue   chan event.Event
-	buf     []event.Event
-	dropped atomic.Int64 // written by collector goroutines
+	client     *http.Client
+	pollClient *http.Client
+	queue      chan event.Event
+	buf        []event.Event
+	dropped    atomic.Int64 // written by collector goroutines
 }
 
 func New(serverURL, token, hostID string, dryRun bool) *Sender {
 	return &Sender{
 		ServerURL: serverURL, Token: token, HostID: hostID, DryRun: dryRun,
 		client: &http.Client{Timeout: 15 * time.Second},
-		queue:  make(chan event.Event, 1000),
+		// Action polls stay open up to 25 s on the SOC side (long polling).
+		pollClient: &http.Client{Timeout: 40 * time.Second},
+		queue:      make(chan event.Event, 1000),
 	}
 }
 
@@ -59,13 +65,18 @@ func (s *Sender) Run(ctx context.Context) {
 	backoff := time.Duration(0)
 	nextTry := time.Time{}
 
+	var soon <-chan time.Time // fires shortly after the first event of a burst
 	for {
 		select {
 		case e := <-s.queue:
 			s.add(e)
 			if len(s.buf) < batchSize {
+				if soon == nil {
+					soon = time.After(coalesce)
+				}
 				continue
 			}
+		case <-soon:
 		case <-ticker.C:
 		case <-ctx.Done():
 			s.drainQueue()
@@ -75,7 +86,8 @@ func (s *Sender) Run(ctx context.Context) {
 			return
 		}
 
-		if time.Now().Before(nextTry) {
+		soon = nil
+		if len(s.buf) == 0 || time.Now().Before(nextTry) {
 			continue
 		}
 		if err := s.flush(ctx); err != nil {
@@ -167,7 +179,9 @@ func (s *Sender) PollActions(ctx context.Context, out any) error {
 	if s.DryRun {
 		return nil
 	}
-	return s.postJSON(ctx, "/api/v1/ingest/actions/poll", map[string]any{"hostId": s.HostID}, out)
+	// wait=25: the SOC holds the request until an action is queued (or 25 s pass), so a
+	// block decided on the SOC reaches this host immediately. Older SOCs ignore it.
+	return s.postJSONWith(ctx, s.pollClient, "/api/v1/ingest/actions/poll?wait=25", map[string]any{"hostId": s.HostID}, out)
 }
 
 // ReportAction sends the outcome of one response action.
@@ -197,6 +211,10 @@ func (s *Sender) post(ctx context.Context, path string, body any) error {
 
 // postJSON posts body and, when out is non-nil, decodes the JSON response into it.
 func (s *Sender) postJSON(ctx context.Context, path string, body any, out any) error {
+	return s.postJSONWith(ctx, s.client, path, body, out)
+}
+
+func (s *Sender) postJSONWith(ctx context.Context, client *http.Client, path string, body any, out any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -207,7 +225,7 @@ func (s *Sender) postJSON(ctx context.Context, path string, body any, out any) e
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.Token)
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
