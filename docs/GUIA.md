@@ -250,16 +250,19 @@ anexar num e-mail. Também dá para chegar nele pelo botão em **Relatórios**.
 
 ### Apresentação do projeto
 
-Uma página de apresentação com **scroll-telling**: um modelo 3D do sistema inteiro fica ao
-fundo e, conforme você rola, a câmera passeia pela parte de que o texto fala. A sequência é:
+Uma apresentação moderna com **scroll-telling** e cenas 3D. Conforme você rola, a câmera passeia
+pelo cenário:
 
-1. o problema (robôs atacando a VPS);
-2. o agente;
-3. o túnel seguro;
-4. a detecção;
-5. a resposta automática, com o firewall bloqueando o atacante;
-6. o painel e o alerta no celular;
-7. a arquitetura 3D das aplicações.
+- **Um notebook 3D** abre na capa e mostra **telas reais do painel**: visão geral, incidente
+  explicado, mapa de ataques e relatório do cliente. A tela troca, com transição, a cada capítulo.
+- **O sistema inteiro em 3D**: robôs atacando, firewall, VPS com o agente, túnel Tailscale, SOC,
+  banco, painel e celular. O tráfego de cada etapa liga no capítulo dela, e na resposta
+  automática o firewall fica vermelho e os ataques param nele.
+- **A arquitetura das aplicações**, a mesma do painel.
+
+São 13 capítulos: capa, o problema, o agente, o caminho seguro, a detecção, a resposta automática,
+os alertas, o painel, os incidentes explicados, o mapa de ataques, a arquitetura em 3D, o
+relatório do cliente e as tecnologias usadas.
 
 Abra em **`/apresentacao`** (por exemplo `http://localhost:8088/apresentacao`). Ela **não pede
 login** e usa dados de demonstração, então dá para projetar numa aula ou mandar o link. Também
@@ -269,9 +272,10 @@ há um atalho no menu lateral (**Apresentação do projeto**) e na tela de login
 
 **Versão em arquivo único (para levar a outro PC).** O arquivo
 [`docs/apresentacao/VPS-SOC-apresentacao.html`](apresentacao/VPS-SOC-apresentacao.html) tem
-tudo dentro: textos, 3D e estilo. Baixe, dê dois cliques e ele abre no navegador, **sem
+tudo dentro: textos, 3D, imagens e estilo (cerca de 2 MB). Baixe, dê dois cliques e ele abre no navegador, **sem
 internet, sem Docker e sem login**. No GitHub, abra o arquivo e clique em *Download raw file*.
-Para gerar de novo depois de mudar a apresentação:
+As telas do notebook ficam em `frontend/src/assets/presentation/` (JPG de 1600×1000); troque
+por prints novos se o painel mudar. Para gerar o arquivo de novo depois de mudar a apresentação:
 
 ```bash
 cd frontend && npm run build:presentation
