@@ -253,15 +253,19 @@ anexar num e-mail. Também dá para chegar nele pelo botão em **Relatórios**.
 Uma apresentação no estilo das páginas de produto, feita só com **prints reais do painel** e
 efeitos que acompanham a rolagem do mouse (*scroll-telling*):
 
-- **Abertura:** o print do painel sobe e se endireita na tela conforme você rola.
+- **Rolagem suave**, com inércia, como em sites de produto (biblioteca Lenis).
+- **Abertura:** o título surge palavra por palavra e o print do painel sobe e se endireita
+  conforme você rola.
 - **O problema:** a frase vai acendendo palavra por palavra.
-- **O painel:** uma janela de navegador fica fixa enquanto os textos passam ao lado. A cada
-  texto ela troca de tela (visão geral, incidente, mapa, aplicações, resposta automática,
-  relatório) e dá zoom no trecho de que o texto fala.
+- **O painel:** uma janela de navegador fica fixa mostrando a **tela inteira**, e um destaque
+  desliza até a parte de que o texto fala, escurecendo o resto. As telas são: visão geral,
+  incidente, mapa, aplicações, resposta automática e relatório. Clique nos traços abaixo da
+  janela para pular de passo.
+- **O que detecta:** uma faixa que corre sozinha com os tipos de ataque e problema.
 - **Como funciona:** a seção trava na tela e os passos (agente → túnel → detecção → resposta →
   alerta) andam para o lado enquanto você rola para baixo.
-- **Números** que contam sozinhos, uma **galeria** de telas com efeito de profundidade
-  (parallax) e o fechamento com as tecnologias usadas.
+- **Números** que contam sozinhos e uma **galeria em mosaico** com as telas reais, que se abrem
+  ao aparecer, cada uma com legenda.
 
 Abra em **`/apresentacao`** (por exemplo `http://localhost:8088/apresentacao`). Ela **não pede
 login** e usa dados de demonstração, então dá para projetar numa aula ou mandar o link. Também
