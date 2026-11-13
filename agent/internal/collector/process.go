@@ -51,6 +51,10 @@ type ProcessMonitor struct {
 	exposed map[int]bool // pids listening on a public address, from the last scan
 }
 
+// execScanEvery is the periodic /proc scan when exec events are available: it only covers
+// what started before the agent and binaries deleted while running.
+const execScanEvery = 30 * time.Second
+
 // execSeen is a process caught by the kernel the moment it called exec, with its parent.
 type execSeen struct{ proc, parent ProcInfo }
 
@@ -62,7 +66,7 @@ func (m *ProcessMonitor) Run(ctx context.Context) {
 	// binary that runs for half a second is still caught. The periodic scan stays: it covers
 	// processes started before the agent and hosts where the connector is unavailable.
 	execs := make(chan execSeen, 256)
-	if err := watchExecs(ctx, func(pid int) {
+	execErr := watchExecs(ctx, func(pid int) {
 		p, ok := ReadProcess(pid)
 		if !ok || p.PID == self {
 			return
@@ -72,11 +76,16 @@ func (m *ProcessMonitor) Run(ctx context.Context) {
 		case execs <- execSeen{p, parent}:
 		default: // flood of execs: the periodic scan still sees the ones that stay alive
 		}
-	}); err != nil {
-		log.Printf("process monitor: exec events unavailable, scanning every %s only: %v", m.Interval, err)
+	})
+	if execErr != nil {
+		log.Printf("process monitor: exec events unavailable, scanning every %s only: %v", m.Interval, execErr)
 	}
 
-	ticker := time.NewTicker(m.Interval)
+	interval := m.Interval
+	if execErr == nil && interval < execScanEvery {
+		interval = execScanEvery // exec events catch new processes; the scan is only a safety net
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		m.scan(self)

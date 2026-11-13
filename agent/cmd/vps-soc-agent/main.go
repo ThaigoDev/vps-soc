@@ -178,6 +178,7 @@ func main() {
 			}
 			p := posture.Read(ctx)
 			listeners := ports.Current()
+			pm2.RefreshUsage()
 			services, pm2Status := pm2.Current()
 			p.Firewall = fw.Stats(ctx)
 			hb := map[string]any{

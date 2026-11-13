@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"os/user"
@@ -93,6 +94,7 @@ type PM2Monitor struct {
 	trigOnce sync.Once
 	trig     chan struct{}
 	daemons  map[int]bool // pids of the PM2 daemons seen on the last scan
+	usage    map[int]cpuMark
 
 	mu       sync.RWMutex
 	current  []Service
@@ -180,11 +182,43 @@ func (m *PM2Monitor) Run(ctx context.Context) {
 }
 
 // PM2Fingerprint lists the PM2 daemons still alive and their direct children (the apps,
-// in fork and cluster mode) with their start times. It only reads /proc/<pid>/stat.
+// in fork and cluster mode) with their start times. It reads the kernel's list of children
+// of each daemon thread (/proc/<pid>/task/<tid>/children), a handful of small files, and
+// falls back to reading every /proc/<pid>/stat when that list is not available.
 func PM2Fingerprint(daemons map[int]bool) string {
 	if len(daemons) == 0 {
 		return ""
 	}
+	var parts []string
+	for d := range daemons {
+		stat, err := os.ReadFile("/proc/" + strconv.Itoa(d) + "/stat")
+		if err != nil {
+			continue // daemon gone: the fingerprint changes
+		}
+		_, _, start, _ := ParseProcStat(string(stat))
+		parts = append(parts, fmt.Sprintf("d%d:%d", d, start))
+		tasks, err := filepath.Glob("/proc/" + strconv.Itoa(d) + "/task/*/children")
+		if err != nil || len(tasks) == 0 {
+			return pm2FingerprintSlow(daemons)
+		}
+		for _, t := range tasks {
+			b, err := os.ReadFile(t)
+			if err != nil {
+				continue
+			}
+			for _, f := range strings.Fields(string(b)) {
+				if st, err := os.ReadFile("/proc/" + f + "/stat"); err == nil {
+					_, _, cstart, _ := ParseProcStat(string(st))
+					parts = append(parts, fmt.Sprintf("%s:%d:%d", f, d, cstart))
+				}
+			}
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func pm2FingerprintSlow(daemons map[int]bool) string {
 	var parts []string
 	dirs, _ := filepath.Glob("/proc/[0-9]*")
 	for _, dir := range dirs {
@@ -197,12 +231,77 @@ func PM2Fingerprint(daemons map[int]bool) string {
 			continue
 		}
 		_, ppid, start, ok := ParseProcStat(string(stat))
-		if ok && (daemons[pid] || daemons[ppid]) {
+		if !ok {
+			continue
+		}
+		if daemons[pid] {
+			parts = append(parts, fmt.Sprintf("d%d:%d", pid, start))
+		} else if daemons[ppid] {
 			parts = append(parts, fmt.Sprintf("%d:%d:%d", pid, ppid, start))
 		}
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, ",")
+}
+
+// RefreshUsage updates the CPU and memory of every running app from /proc, without asking
+// PM2 (`pm2 jlist` starts a node process, which costs far more than the reading itself).
+// Called before each heartbeat, so the dashboard numbers stay fresh between full scans.
+func (m *PM2Monitor) RefreshUsage() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	if m.usage == nil {
+		m.usage = map[int]cpuMark{}
+	}
+	next := map[int]cpuMark{}
+	services := make([]Service, len(m.current))
+	copy(services, m.current)
+	for i, s := range services {
+		if s.PID <= 0 {
+			continue
+		}
+		ticks, rss, ok := readUsage(s.PID)
+		if !ok {
+			continue
+		}
+		services[i].MemoryBytes = rss
+		if prev, ok := m.usage[s.PID]; ok && now.After(prev.at) && ticks >= prev.ticks {
+			secs := now.Sub(prev.at).Seconds()
+			services[i].CPUPercent = math.Round(float64(ticks-prev.ticks)/clockTicks/secs*1000) / 10
+		}
+		next[s.PID] = cpuMark{ticks: ticks, at: now}
+	}
+	m.usage = next
+	m.current = services
+}
+
+type cpuMark struct {
+	ticks uint64
+	at    time.Time
+}
+
+const clockTicks = 100 // USER_HZ: 100 on every Linux build we target
+
+// readUsage returns utime+stime (clock ticks) and the resident memory of a process.
+func readUsage(pid int) (ticks, rss uint64, ok bool) {
+	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0, 0, false
+	}
+	s := string(stat)
+	end := strings.LastIndexByte(s, ')')
+	if end < 0 {
+		return 0, 0, false
+	}
+	f := strings.Fields(s[end+1:])
+	if len(f) < 22 {
+		return 0, 0, false
+	}
+	utime, _ := strconv.ParseUint(f[11], 10, 64)
+	stime, _ := strconv.ParseUint(f[12], 10, 64)
+	rssPages, _ := strconv.ParseUint(f[21], 10, 64)
+	return utime + stime, rssPages * uint64(os.Getpagesize()), true
 }
 
 // scan lists the apps of every PM2 daemon and reports whether one of them is in a

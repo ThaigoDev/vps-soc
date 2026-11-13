@@ -61,7 +61,7 @@ func Load() (Config, error) {
 	if c.ProcScanInterval, err = duration("SOC_PROCESS_SCAN_INTERVAL", 5*time.Second); err != nil {
 		return c, err
 	}
-	if c.PM2Interval, err = duration("SOC_PM2_INTERVAL", 15*time.Second); err != nil {
+	if c.PM2Interval, err = duration("SOC_PM2_INTERVAL", time.Minute); err != nil {
 		return c, err
 	}
 	if c.UnitWatchInterval, err = duration("SOC_UNIT_WATCH_INTERVAL", 2*time.Second); err != nil {

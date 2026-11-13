@@ -129,8 +129,12 @@ func listenerEvent(typ string, l Listener, ts time.Time) event.Event {
 
 // ListListeners reads /proc/net/tcp{,6} and resolves the owning process.
 func ListListeners() ([]Listener, error) {
-	owners := socketOwners()
-	var out []Listener
+	type row struct {
+		l          Listener
+		inode, uid string
+	}
+	var rows []row
+	var inodes []string
 	for _, f := range []struct{ path, proto string }{{"/proc/net/tcp", "tcp"}, {"/proc/net/tcp6", "tcp6"}} {
 		file, err := os.Open(f.path)
 		if err != nil {
@@ -146,13 +150,20 @@ func ListListeners() ([]Listener, error) {
 			if !ok {
 				continue
 			}
-			if o, ok := owners[inode]; ok {
-				l.PID, l.Process, l.Exe = o.pid, o.comm, o.exe
-			}
-			l.User = lookupUser(uid)
-			out = append(out, l)
+			rows = append(rows, row{l, inode, uid})
+			inodes = append(inodes, inode)
 		}
 		file.Close()
+	}
+	owners := ownersOf(inodes)
+	out := make([]Listener, 0, len(rows))
+	for _, r := range rows {
+		l := r.l
+		if o, ok := owners[r.inode]; ok {
+			l.PID, l.Process, l.Exe = o.pid, o.comm, o.exe
+		}
+		l.User = lookupUser(r.uid)
+		out = append(out, l)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Port != out[j].Port {
@@ -164,10 +175,9 @@ func ListListeners() ([]Listener, error) {
 }
 
 // PublicListenerPIDs returns the processes holding a TCP socket that listens on a
-// non-loopback address. Process managers that legitimately spawn shells (systemd
-// socket activation, sshd) are left out.
+// non-loopback address (sshd, systemd socket activation and tailscaled excluded).
 func PublicListenerPIDs() map[int]bool {
-	inodes := map[string]bool{}
+	var inodes []string
 	for _, f := range []struct{ path, proto string }{{"/proc/net/tcp", "tcp"}, {"/proc/net/tcp6", "tcp6"}} {
 		b, err := os.ReadFile(f.path)
 		if err != nil {
@@ -175,36 +185,61 @@ func PublicListenerPIDs() map[int]bool {
 		}
 		for _, line := range strings.Split(string(b), "\n")[1:] {
 			if l, inode, _, ok := parseProcNetLine(line, f.proto); ok && isExposedAddress(l.Address) {
-				inodes[inode] = true
+				inodes = append(inodes, inode)
 			}
 		}
 	}
 	out := map[int]bool{}
-	if len(inodes) == 0 {
-		return out
+	for _, o := range ownersOf(inodes) {
+		if o.pid != 1 && !shellLaunchers(o.comm) {
+			out[o.pid] = true
+		}
 	}
-	pids, _ := filepath.Glob("/proc/[0-9]*")
-	for _, dir := range pids {
-		pid, err := strconv.Atoi(filepath.Base(dir))
-		if err != nil || pid == 1 {
-			continue
+	return out
+}
+
+// Mapping a socket to its process means reading every /proc/<pid>/fd link, which is
+// expensive on a server running big Node apps (thousands of descriptors). Listening sockets
+// live as long as their process, so the owners are cached and /proc/*/fd is only walked
+// again when a listening socket appears that is not known yet (or every few minutes).
+var ownerCache struct {
+	sync.Mutex
+	known      map[string]owner
+	unresolved map[string]bool // inodes no process holds (another namespace): not retried every time
+	fullAt     time.Time
+}
+
+const ownerRescanEvery = 5 * time.Minute
+
+func ownersOf(inodes []string) map[string]owner {
+	c := &ownerCache
+	c.Lock()
+	defer c.Unlock()
+	stale := c.known == nil || time.Since(c.fullAt) > ownerRescanEvery
+	for _, ino := range inodes {
+		if stale {
+			break
 		}
-		fds, err := os.ReadDir(dir + "/fd")
-		if err != nil {
-			continue
+		if o, ok := c.known[ino]; ok {
+			if _, err := os.Stat("/proc/" + strconv.Itoa(o.pid)); err != nil {
+				stale = true // owner exited, the inode may belong to someone else now
+			}
+		} else if !c.unresolved[ino] {
+			stale = true
 		}
-		for _, fd := range fds {
-			target, err := os.Readlink(dir + "/fd/" + fd.Name())
-			if err != nil || !strings.HasPrefix(target, "socket:[") {
-				continue
+	}
+	if stale {
+		c.known, c.unresolved, c.fullAt = socketOwners(), map[string]bool{}, time.Now()
+		for _, ino := range inodes {
+			if _, ok := c.known[ino]; !ok {
+				c.unresolved[ino] = true
 			}
-			if inodes[strings.TrimSuffix(strings.TrimPrefix(target, "socket:["), "]")] {
-				comm, _ := os.ReadFile(dir + "/comm")
-				if !shellLaunchers(strings.TrimSpace(string(comm))) {
-					out[pid] = true
-				}
-				break
-			}
+		}
+	}
+	out := make(map[string]owner, len(inodes))
+	for _, ino := range inodes {
+		if o, ok := c.known[ino]; ok {
+			out[ino] = o
 		}
 	}
 	return out
