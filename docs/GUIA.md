@@ -250,19 +250,18 @@ anexar num e-mail. Também dá para chegar nele pelo botão em **Relatórios**.
 
 ### Apresentação do projeto
 
-Uma apresentação moderna com **scroll-telling** e cenas 3D. Conforme você rola, a câmera passeia
-pelo cenário:
+Uma apresentação no estilo das páginas de produto, feita só com **prints reais do painel** e
+efeitos que acompanham a rolagem do mouse (*scroll-telling*):
 
-- **Um notebook 3D** abre na capa e mostra **telas reais do painel**: visão geral, incidente
-  explicado, mapa de ataques e relatório do cliente. A tela troca, com transição, a cada capítulo.
-- **O sistema inteiro em 3D**: robôs atacando, firewall, VPS com o agente, túnel Tailscale, SOC,
-  banco, painel e celular. O tráfego de cada etapa liga no capítulo dela, e na resposta
-  automática o firewall fica vermelho e os ataques param nele.
-- **A arquitetura das aplicações**, a mesma do painel.
-
-São 13 capítulos: capa, o problema, o agente, o caminho seguro, a detecção, a resposta automática,
-os alertas, o painel, os incidentes explicados, o mapa de ataques, a arquitetura em 3D, o
-relatório do cliente e as tecnologias usadas.
+- **Abertura:** o print do painel sobe e se endireita na tela conforme você rola.
+- **O problema:** a frase vai acendendo palavra por palavra.
+- **O painel:** uma janela de navegador fica fixa enquanto os textos passam ao lado. A cada
+  texto ela troca de tela (visão geral, incidente, mapa, aplicações, resposta automática,
+  relatório) e dá zoom no trecho de que o texto fala.
+- **Como funciona:** a seção trava na tela e os passos (agente → túnel → detecção → resposta →
+  alerta) andam para o lado enquanto você rola para baixo.
+- **Números** que contam sozinhos, uma **galeria** de telas com efeito de profundidade
+  (parallax) e o fechamento com as tecnologias usadas.
 
 Abra em **`/apresentacao`** (por exemplo `http://localhost:8088/apresentacao`). Ela **não pede
 login** e usa dados de demonstração, então dá para projetar numa aula ou mandar o link. Também
@@ -272,9 +271,9 @@ há um atalho no menu lateral (**Apresentação do projeto**) e na tela de login
 
 **Versão em arquivo único (para levar a outro PC).** O arquivo
 [`docs/apresentacao/VPS-SOC-apresentacao.html`](apresentacao/VPS-SOC-apresentacao.html) tem
-tudo dentro: textos, 3D, imagens e estilo (cerca de 2 MB). Baixe, dê dois cliques e ele abre no navegador, **sem
+tudo dentro: textos, imagens e estilo (cerca de 1,6 MB). Baixe, dê dois cliques e ele abre no navegador, **sem
 internet, sem Docker e sem login**. No GitHub, abra o arquivo e clique em *Download raw file*.
-As telas do notebook ficam em `frontend/src/assets/presentation/` (JPG de 1600×1000); troque
+As telas usadas ficam em `frontend/src/assets/presentation/` (JPG de 1600×1000); troque
 por prints novos se o painel mudar. Para gerar o arquivo de novo depois de mudar a apresentação:
 
 ```bash

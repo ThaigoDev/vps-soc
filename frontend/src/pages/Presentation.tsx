@@ -1,281 +1,135 @@
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { ContactShadows, Environment, Float, Lightformer, RoundedBox, Sparkles, Stars } from '@react-three/drei'
-import * as THREE from 'three'
-import { ArrowDown, ArrowRight, BookOpen, Github, Shield } from 'lucide-react'
-import type { Host, ServiceView } from '../api'
-import { buildFlow } from '../components/InfraFlow'
-import { ArchScene } from '../components/three/AppArchitecture3D'
-import { Laptop } from '../components/three/Laptop'
-import { Label3D, Link3D, Particles, StateRing, makeCurve, reducedMotion, usePalette, webglAvailable } from '../components/three/kit'
+import { ArrowDown, ArrowRight, Bell, BookOpen, Cpu, Github, Lock, Radar, Shield, ShieldCheck } from 'lucide-react'
 import shotOverview from '../assets/presentation/overview.jpg'
 import shotIncident from '../assets/presentation/incident.jpg'
 import shotMap from '../assets/presentation/map.jpg'
 import shotArchitecture from '../assets/presentation/architecture.jpg'
 import shotReport from '../assets/presentation/report.jpg'
+import shotResponse from '../assets/presentation/response.jpg'
+import shotServices from '../assets/presentation/services.jpg'
 
 /*
- * Scroll-telling presentation of the project. A fixed 3D stage sits behind the text:
- *   - a laptop showing real screenshots of the dashboard (it opens on the cover and the
- *     screen cross-fades between pages as you scroll);
- *   - a model of the whole system (attackers, firewall, VPS + agent, Tailscale tunnel,
- *     backend, database, dashboard, phone) whose traffic turns on chapter by chapter;
- *   - the application architecture view used in the dashboard.
- * Each chapter flies the camera to its subject. Public route (/apresentacao) and an offline
- * single-file build (npm run build:presentation); demo data only.
+ * Scroll-telling presentation built only from real screenshots of the dashboard, in the
+ * style of product pages: the hero screenshot rises and flattens as you scroll, a statement
+ * lights up word by word, a pinned browser window swaps screenshots and zooms into the part
+ * the text is talking about, a pinned track scrolls sideways through how it works, numbers
+ * count up and a gallery drifts with parallax. No 3D; everything is CSS driven by scroll.
+ * Public route (/apresentacao) and an offline single-file build (npm run build:presentation).
  */
 
-const SCREENS = [shotOverview, shotIncident, shotMap, shotArchitecture, shotReport]
-type Screen = 'overview' | 'incident' | 'map' | 'architecture' | 'report'
-const SCREEN_INDEX: Record<Screen, number> = { overview: 0, incident: 1, map: 2, architecture: 3, report: 4 }
+const ACCENT = 'linear-gradient(90deg, #7cb2ff, #b69cff)'
+const BUTTON = 'linear-gradient(90deg, #3b82f6, #7c3aed)'
 
-type Phase = 'cover' | 'problem' | 'agent' | 'tunnel' | 'detect' | 'respond' | 'alerts' | 'all'
-const order: Phase[] = ['cover', 'problem', 'agent', 'tunnel', 'detect', 'respond', 'alerts', 'all']
+// ---- scroll helpers ---------------------------------------------------------------------------
 
-interface Chapter {
-  kicker: string
-  title: string
-  body: ReactNode
-  cam: [number, number, number]
-  look: [number, number, number]
-  phase: Phase
-  /** Shows the laptop with this page of the dashboard. */
-  screen?: Screen
-  /** Laptop turn (radians) while this chapter is on. */
-  turn?: number
-  tags?: string[]
+function reducedMotion(): boolean {
+  return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
-const APP_Z = -30
-const LAPTOP: [number, number, number] = [0, -0.4, 26]
-const atLaptop = (dx: number, dy: number, dz: number): [number, number, number] => [LAPTOP[0] + dx, LAPTOP[1] + dy, LAPTOP[2] + dz]
+const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v))
 
-const chapters: Chapter[] = [
-  {
-    kicker: 'VPS-SOC',
-    title: 'Segurança de servidor que qualquer pessoa entende',
-    body: <>Um centro de operações de segurança para a sua VPS: vigia 24 horas, entende os ataques, reage sozinho e explica tudo em português.</>,
-    cam: atLaptop(0, 2.0, 5.6), look: atLaptop(0, 1.0, 0), phase: 'cover', screen: 'overview', turn: -0.35,
-    tags: ['Agente em Go', 'Detecção + MITRE ATT&CK', 'Resposta automática', 'Painel em português'],
-  },
-  {
-    kicker: 'O problema',
-    title: 'Toda VPS é atacada minutos depois de ligada',
-    body: <>Robôs no mundo inteiro tentam adivinhar a senha do SSH o dia todo. Quem cuida do servidor raramente olha os logs, e só percebe a invasão quando o estrago já aconteceu.</>,
-    cam: [-9.5, 4, 8.5], look: [-7, 0, 0], phase: 'problem',
-  },
-  {
-    kicker: 'O agente',
-    title: 'Um programa pequeno de vigia dentro da VPS',
-    body: (
-      <ul className="space-y-2">
-        <li>Lê os logins (SSH e sudo) em tempo real</li>
-        <li>Percebe portas novas e processos suspeitos</li>
-        <li>Vigia arquivos críticos: chaves SSH, sudoers, cron</li>
-        <li>Mede CPU, memória, disco e as aplicações do PM2</li>
-      </ul>
-    ),
-    cam: [-2.4, 3.2, 6.5], look: [-3, 0.2, 0], phase: 'agent',
-  },
-  {
-    kicker: 'Caminho seguro',
-    title: 'Os eventos saem por um túnel criptografado',
-    body: <>O agente envia tudo pelo Tailscale para o SOC, que roda <b className="text-ink">fora</b> da VPS. Se um invasor tomar o servidor, não consegue apagar o histórico, e o silêncio do agente vira um alerta.</>,
-    cam: [0, 5, 10], look: [0, 0, 0], phase: 'tunnel',
-  },
-  {
-    kicker: 'Detecção',
-    title: 'Regras transformam eventos em incidentes',
-    body: <>Força bruta, login depois de força bruta, chave SSH plantada, web shell… Cada incidente ganha nível de risco e as técnicas do MITRE ATT&amp;CK envolvidas.</>,
-    cam: [4.8, 4.6, 7.5], look: [3, 0, -1.2], phase: 'detect',
-  },
-  {
-    kicker: 'Resposta automática',
-    title: 'O atacante é bloqueado em segundos',
-    body: <>O SOC manda o agente colocar o IP no firewall da VPS e os ataques param de chegar. Ações delicadas, como encerrar um processo, esperam a aprovação de uma pessoa.</>,
-    cam: [-6, 5.2, 9.5], look: [-5.6, 0, 0], phase: 'respond',
-  },
-  {
-    kicker: 'Alertas',
-    title: 'O aviso chega no celular, mesmo com o painel fechado',
-    body: <>Incidentes graves vão para o Telegram na hora. No navegador, uma sirene e uma notificação avisam quem estiver de plantão.</>,
-    cam: [8.8, 4.4, 8.4], look: [5.6, 0.2, 0], phase: 'alerts',
-  },
-  {
-    kicker: 'O painel',
-    title: 'A situação inteira em uma tela',
-    body: <>Uma frase diz se está tudo bem. Logo abaixo, o que precisa de atenção, os servidores, as aplicações e a atividade das últimas horas.</>,
-    cam: atLaptop(-0.4, 2.0, 5.4), look: atLaptop(0, 1.0, 0), phase: 'all', screen: 'overview', turn: 0.3,
-  },
-  {
-    kicker: 'Incidentes explicados',
-    title: 'O que aconteceu, por que importa e o que fazer',
-    body: <>Cada incidente é escrito com os dados reais: quem, de onde, quantas vezes e o que fez depois. Os próximos passos vêm com o comando pronto para copiar.</>,
-    cam: atLaptop(0.2, 1.9, 5.7), look: atLaptop(0, 1.0, 0), phase: 'all', screen: 'incident', turn: -0.25,
-  },
-  {
-    kicker: 'Mapa de ataques',
-    title: 'Onde está o servidor e de onde vêm os ataques',
-    body: <>O mapa-múndi mostra o servidor e cada IP que tentou entrar, com linhas até o alvo. Ao lado, os países que mais atacaram.</>,
-    cam: atLaptop(-0.6, 1.9, 5.3), look: atLaptop(0, 1.0, 0), phase: 'all', screen: 'map', turn: 0.22,
-  },
-  {
-    kicker: 'Arquitetura em 3D',
-    title: 'Veja onde está o problema, peça por peça',
-    body: <>Internet, firewall, servidor, domínios e portas, aplicações. Cada peça tem a cor do seu estado e o tráfego para onde algo quebrou. No painel, dá para girar e clicar em cada uma.</>,
-    cam: [1.5, 12, APP_Z + 15], look: [1.2, 0, APP_Z], phase: 'all',
-  },
-  {
-    kicker: 'Relatório do cliente',
-    title: 'Um resumo de uma página, pronto para enviar',
-    body: <>Tentativas de invasão, alertas, o que foi bloqueado sozinho, países de origem e o que recomendamos fazer, em linguagem simples. Sai em PDF com um clique.</>,
-    cam: atLaptop(0.4, 1.9, 5.3), look: atLaptop(0, 1.0, 0), phase: 'all', screen: 'report', turn: -0.3,
-  },
-  {
-    kicker: 'Feito com',
-    title: 'Go, Java/Spring Boot, React e PostgreSQL',
-    body: <>Agente em Go de poucos megabytes, backend em Spring Boot com PostgreSQL, painel em React com three.js. Tudo sobe com um único <code className="font-mono text-ink">docker compose up</code>.</>,
-    cam: atLaptop(3.2, 3.4, 8.5), look: atLaptop(-0.6, 0.8, -3), phase: 'all', screen: 'overview', turn: -0.5,
-  },
-]
-
-/** {@code standalone}: the offline single-file build, without links into the dashboard. */
-export default function Presentation({ standalone = false }: { standalone?: boolean }) {
-  const [step, setStep] = useState(0)
-  const refs = useRef<(HTMLElement | null)[]>([])
-  const [progress, setProgress] = useState(0)
-  const gl = useMemo(webglAvailable, [])
-  useDarkTheme()
-
+/** 0 when the section's top reaches the top of the screen, 1 when its bottom reaches the bottom. */
+function useSectionProgress<T extends HTMLElement>(): [RefObject<T>, number] {
+  const ref = useRef<T>(null)
+  const [p, setP] = useState(0)
   useEffect(() => {
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) setStep(Number((e.target as HTMLElement).dataset.step))
-    }, { rootMargin: '-45% 0px -45% 0px' })
-    refs.current.forEach((el) => el && io.observe(el))
-    const onScroll = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight
-      setProgress(max > 0 ? window.scrollY / max : 0)
+    let raf = 0
+    const update = () => {
+      raf = 0
+      const el = ref.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const total = r.height - window.innerHeight
+      setP(total > 0 ? clamp(-r.top / total) : r.top < window.innerHeight ? 1 : 0)
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
+    const on = () => { if (!raf) raf = requestAnimationFrame(update) }
+    update()
+    window.addEventListener('scroll', on, { passive: true })
+    window.addEventListener('resize', on)
     return () => {
-      io.disconnect()
-      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('scroll', on)
+      window.removeEventListener('resize', on)
+      if (raf) cancelAnimationFrame(raf)
     }
   }, [])
+  return [ref, reducedMotion() ? 1 : p]
+}
 
-  const go = (i: number) => refs.current[i]?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' })
-  const chapter = chapters[step]
-  // The laptop keeps showing the last page it showed while the camera is elsewhere.
-  const lastScreen = useRef<Screen>('overview')
-  if (chapter.screen) lastScreen.current = chapter.screen
+/** True once the element has entered the screen (for one-shot reveals). */
+function useInView<T extends HTMLElement>(margin = '-15% 0px'): [RefObject<T>, boolean] {
+  const ref = useRef<T>(null)
+  const [seen, setSeen] = useState(reducedMotion())
+  useEffect(() => {
+    const el = ref.current
+    if (!el || seen) return
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setSeen(true); io.disconnect() } }, { rootMargin: margin })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [margin, seen])
+  return [ref, seen]
+}
 
+function Reveal({ children, delay = 0, className = '' }: { children: ReactNode; delay?: number; className?: string }) {
+  const [ref, seen] = useInView<HTMLDivElement>()
   return (
-    <div className="relative bg-page text-ink">
-      <div className="fixed inset-0" aria-hidden>
-        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 60% at 65% 35%, rgba(91,157,255,0.16), transparent 60%), radial-gradient(ellipse 60% 50% at 85% 85%, rgba(167,139,250,0.12), transparent 60%), var(--page)' }} />
-        {gl && (
-          <Canvas camera={{ position: chapters[0].cam, fov: 40 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
-            <Stage step={step} screen={lastScreen.current} />
-          </Canvas>
-        )}
-        <div className="pointer-events-none absolute inset-0 hidden md:block" style={{ background: 'linear-gradient(90deg, rgba(11,15,20,0.88) 0%, rgba(11,15,20,0.45) 32%, transparent 52%)' }} />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 md:hidden" style={{ background: 'linear-gradient(0deg, rgba(11,15,20,0.92), transparent)' }} />
-      </div>
-
-      {/* Top bar */}
-      <header className="fixed inset-x-0 top-0 z-20 flex items-center gap-3 px-5 py-4 md:px-8">
-        <span className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'linear-gradient(135deg, #5b9dff, #8b5cf6)' }}>
-            <Shield size={17} className="text-white" aria-hidden />
-          </span>
-          VPS-SOC
-        </span>
-        <span className="tnum ml-3 hidden text-xs text-muted sm:inline">{String(step + 1).padStart(2, '0')} / {String(chapters.length).padStart(2, '0')}</span>
-        {!standalone && (
-          <div className="ml-auto flex items-center gap-2">
-            <Link to="/" className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-sm backdrop-blur hover:bg-white/10">Abrir o painel</Link>
-          </div>
-        )}
-      </header>
-      <div className="fixed inset-x-0 top-0 z-30 h-[3px]">
-        <div className="h-full" style={{ width: `${progress * 100}%`, background: 'linear-gradient(90deg, #5b9dff, #a78bfa)' }} />
-      </div>
-
-      {/* Chapter dots */}
-      <nav className="fixed right-5 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-3 md:flex" aria-label="Capítulos">
-        {chapters.map((c, i) => (
-          <button key={c.title} onClick={() => go(i)} aria-label={`Ir para: ${c.kicker}`} aria-current={i === step}
-            className="group relative flex items-center justify-end">
-            <span className="pointer-events-none absolute right-5 whitespace-nowrap rounded-md bg-surface/90 px-2 py-0.5 text-xs text-ink2 opacity-0 transition-opacity group-hover:opacity-100">{c.kicker}</span>
-            <span className={`block rounded-full transition-all ${i === step ? 'h-6 w-1.5 bg-[#5b9dff]' : 'h-1.5 w-1.5 bg-white/35 group-hover:bg-white/70'}`} />
-          </button>
-        ))}
-      </nav>
-
-      {/* Chapters */}
-      <main className="relative z-10">
-        {chapters.map((c, i) => (
-          <section key={c.title} ref={(el) => { refs.current[i] = el }} data-step={i}
-            className="flex min-h-screen items-end px-4 pb-10 pt-24 md:items-center md:px-12 md:py-24 lg:px-20">
-            <Card chapter={c} index={i} active={i === step} first={i === 0} last={i === chapters.length - 1} standalone={standalone} onNext={() => go(1)} />
-          </section>
-        ))}
-      </main>
+    <div ref={ref} className={className}
+      style={{ opacity: seen ? 1 : 0, transform: seen ? 'none' : 'translateY(32px)', transition: `opacity .9s ${delay}ms cubic-bezier(.2,.7,.2,1), transform .9s ${delay}ms cubic-bezier(.2,.7,.2,1)` }}>
+      {children}
     </div>
   )
 }
 
-function Card({ chapter: c, index, active, first, last, standalone, onNext }: {
-  chapter: Chapter
-  index: number
-  active: boolean
-  first: boolean
-  last: boolean
-  standalone: boolean
-  onNext: () => void
-}) {
+function GradientText({ children }: { children: ReactNode }) {
+  return <span style={{ background: ACCENT, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{children}</span>
+}
+
+/** A browser window around a screenshot. */
+function BrowserFrame({ children, url = 'vps-soc · painel', className = '' }: { children: ReactNode; url?: string; className?: string }) {
   return (
-    <div className={`relative w-full max-w-[30rem] overflow-hidden rounded-3xl border p-7 shadow-2xl transition-all duration-700 md:p-8 ${active ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-30'}`}
-      style={{ borderColor: 'rgba(255,255,255,0.10)', background: 'linear-gradient(160deg, rgba(23,30,42,0.78), rgba(12,16,23,0.62))', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' }}>
-      <span className="pointer-events-none absolute -right-2 -top-6 select-none text-[7rem] font-bold leading-none text-white/[0.04]">{String(index + 1).padStart(2, '0')}</span>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ background: 'linear-gradient(90deg, #7cb2ff, #b69cff)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-        {c.kicker}
-      </p>
-      <h2 className={`mt-3 font-semibold leading-[1.1] tracking-tight text-white ${first ? 'text-4xl md:text-5xl' : 'text-[1.75rem] md:text-3xl'}`}>{c.title}</h2>
-      <div className="mt-4 text-[15.5px] leading-relaxed text-ink2 [&_li]:relative [&_li]:pl-5 [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:top-[0.6em] [&_li]:before:h-1.5 [&_li]:before:w-1.5 [&_li]:before:rounded-full [&_li]:before:bg-[#5b9dff]">
-        {c.body}
+    <div className={`overflow-hidden rounded-2xl border border-white/10 bg-[#0d1117] shadow-[0_40px_120px_-20px_rgba(59,130,246,0.35)] ${className}`}>
+      <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-4 py-2.5">
+        <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+        <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+        <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+        <span className="mx-auto truncate rounded-md bg-white/5 px-3 py-0.5 text-[11px] text-white/50">{url}</span>
+        <span className="w-12" />
       </div>
-      {c.tags && (
-        <ul className="mt-5 flex flex-wrap gap-2">
-          {c.tags.map((t) => <li key={t} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-ink2">{t}</li>)}
-        </ul>
-      )}
-      {first && (
-        <button onClick={onNext} className="mt-7 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:brightness-110"
-          style={{ background: 'linear-gradient(90deg, #3b82f6, #7c3aed)' }}>
-          Começar <ArrowDown size={15} className="motion-safe:animate-bounce" aria-hidden />
-        </button>
-      )}
-      {last && (
-        <div className="mt-7 flex flex-wrap gap-2">
-          {!standalone && (
-            <Link to="/" className="inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110"
-              style={{ background: 'linear-gradient(90deg, #3b82f6, #7c3aed)' }}>
-              Abrir o painel <ArrowRight size={15} aria-hidden />
-            </Link>
-          )}
-          <a href="https://github.com/ThaigoDev/vps-soc" target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-sm hover:bg-white/10">
-            <Github size={15} aria-hidden /> Código no GitHub
-          </a>
-          <a href="https://github.com/ThaigoDev/vps-soc/blob/main/docs/GUIA.md" target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-sm hover:bg-white/10">
-            <BookOpen size={15} aria-hidden /> Guia
-          </a>
-        </div>
-      )}
+      {children}
+    </div>
+  )
+}
+
+// ---- page ---------------------------------------------------------------------------------------
+
+/** {@code standalone}: the offline single-file build, without links into the dashboard. */
+export default function Presentation({ standalone = false }: { standalone?: boolean }) {
+  useDarkTheme()
+  const [pageRef, page] = useSectionProgress<HTMLDivElement>()
+  return (
+    <div ref={pageRef} className="relative min-h-screen overflow-x-clip text-white" style={{ background: '#07090d' }}>
+      <div className="fixed inset-x-0 top-0 z-50 h-[3px]">
+        <div className="h-full" style={{ width: `${page * 100}%`, background: ACCENT }} />
+      </div>
+      <header className="fixed inset-x-0 top-0 z-40 flex items-center gap-3 bg-[#07090d]/95 px-5 py-4 md:bg-transparent md:px-10" style={{ backgroundImage: 'linear-gradient(180deg, rgba(7,9,13,0.9), rgba(7,9,13,0))' }}>
+        <span className="flex items-center gap-2 font-semibold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: BUTTON }}>
+            <Shield size={17} aria-hidden />
+          </span>
+          VPS-SOC
+        </span>
+        {!standalone && (
+          <Link to="/" className="ml-auto rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-sm hover:bg-white/10">Abrir o painel</Link>
+        )}
+      </header>
+
+      <Hero />
+      <Statement />
+      <Showcase />
+      <HowItWorks />
+      <Numbers />
+      <Gallery />
+      <Closing standalone={standalone} />
     </div>
   )
 }
@@ -292,282 +146,337 @@ function useDarkTheme() {
   }, [])
 }
 
-function Stage({ step, screen }: { step: number; screen: Screen }) {
-  const p = usePalette()
-  const c = chapters[step]
+// ---- 1. hero: the screenshot rises and flattens ---------------------------------------------
+
+function Hero() {
+  const [ref, p] = useSectionProgress<HTMLElement>()
+  const t = clamp(p / 0.7)
+  const ease = 1 - Math.pow(1 - t, 3)
   return (
-    <>
-      <fog attach="fog" args={[p.page, 26, 80]} />
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[6, 10, 8]} intensity={1.1} />
-      <directionalLight position={[-8, 5, -6]} intensity={0.35} color="#a78bfa" />
-      <Environment resolution={256} frames={1}>
-        <Lightformer form="rect" intensity={2.2} position={[0, 5, 8]} scale={[10, 4, 1]} color="#ffffff" />
-        <Lightformer form="rect" intensity={1.4} position={[-6, 2, 2]} rotation-y={Math.PI / 2} scale={[8, 2, 1]} color="#7cb2ff" />
-        <Lightformer form="rect" intensity={1.2} position={[6, 2, 2]} rotation-y={-Math.PI / 2} scale={[8, 2, 1]} color="#b69cff" />
-      </Environment>
-      <Stars radius={90} depth={50} count={1800} factor={3} saturation={0} fade speed={0.4} />
-      <CameraRig step={step} />
-      <SystemScene phase={c.phase} labels={!c.screen && c.phase !== 'all'} />
-      <group position={[0, 0, APP_Z]}>
-        <DemoApps visible={chapters[step].kicker === 'Arquitetura em 3D'} />
-      </group>
-      <LaptopStage step={step} screen={screen} />
-    </>
+    <section ref={ref} className="relative h-[230vh]">
+      <div className="sticky top-0 flex h-screen flex-col items-center overflow-hidden px-5 pt-28 md:pt-32">
+        <div className="pointer-events-none absolute left-1/2 top-[30%] h-[60vh] w-[80vw] -translate-x-1/2 rounded-full opacity-60 blur-[120px]"
+          style={{ background: 'radial-gradient(closest-side, rgba(59,130,246,0.45), rgba(124,58,237,0.25), transparent)' }} />
+        <div className="relative z-10 max-w-4xl text-center" style={{ opacity: 1 - clamp(p * 2.2), transform: `translateY(${-p * 120}px) scale(${1 - p * 0.08})` }}>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/60">Centro de operações de segurança para VPS</p>
+          <h1 className="mt-5 text-[2.6rem] font-semibold leading-[1.05] tracking-tight md:text-7xl">
+            Segurança de servidor que <GradientText>qualquer pessoa entende</GradientText>
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-base text-white/65 md:text-lg">
+            O VPS-SOC vigia sua VPS 24 horas, entende os ataques, reage sozinho e explica tudo em português.
+          </p>
+          <p className="mt-8 inline-flex items-center gap-2 text-sm text-white/50">
+            Role para conhecer <ArrowDown size={15} className="motion-safe:animate-bounce" aria-hidden />
+          </p>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 flex justify-center px-4" style={{ perspective: '1400px' }}>
+          <div className="w-full max-w-6xl" style={{
+            transform: `translateY(${(1 - ease) * 46}vh) rotateX(${(1 - ease) * 28}deg) scale(${0.82 + ease * 0.18})`,
+            transformOrigin: '50% 100%',
+            marginBottom: `${ease * 7}vh`,
+          }}>
+            <BrowserFrame>
+              <img src={shotOverview} alt="Visão geral do painel do VPS-SOC" className="block w-full" />
+            </BrowserFrame>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
-/** The laptop: opens on load, turns a little per chapter, floats gently. */
-function LaptopStage({ step, screen }: { step: number; screen: Screen }) {
-  const turn = useRef<THREE.Group>(null)
-  const [open, setOpen] = useState(0)
-  const still = reducedMotion()
-  useEffect(() => {
-    const t = window.setTimeout(() => setOpen(1), still ? 0 : 500)
-    return () => window.clearTimeout(t)
-  }, [still])
-  useFrame((_, dt) => {
-    if (!turn.current) return
-    const target = chapters[step].turn ?? 0
-    turn.current.rotation.y += (target - turn.current.rotation.y) * (still ? 1 : 1 - Math.exp(-dt * 2))
-  })
-  const p = usePalette()
+// ---- 2. statement: words light up -------------------------------------------------------------
+
+const STATEMENT = 'Toda VPS ligada na internet é atacada minutos depois. Robôs tentam milhares de senhas por dia, e quem cuida do servidor só descobre a invasão quando o estrago já aconteceu.'
+const HOT = ['minutos', 'milhares', 'invasão']
+
+function Statement() {
+  const [ref, p] = useSectionProgress<HTMLElement>()
+  const words = STATEMENT.split(' ')
+  const lit = p * 1.25 * words.length
   return (
-    <group position={LAPTOP}>
-      <Float speed={still ? 0 : 1.2} rotationIntensity={0.08} floatIntensity={0.25} floatingRange={[0, 0.12]}>
-        <group ref={turn} rotation={[0, chapters[0].turn ?? 0, 0]}>
-          <Suspense fallback={null}>
-            <Laptop screens={SCREENS} current={SCREEN_INDEX[screen]} open={open} />
-          </Suspense>
-          {/* Soft screen glow on the floor */}
-          <pointLight position={[0, 1.2, 1.4]} intensity={6} distance={6} color="#7cb2ff" />
-        </group>
-      </Float>
-      <ContactShadows position={[0, -0.02, 0]} opacity={0.55} scale={12} blur={2.6} far={4} color="#000000" />
-      <Sparkles count={still ? 0 : 50} scale={[10, 4, 8]} position={[0, 1.6, 0]} size={2.2} speed={0.25} opacity={0.6} color={p.hud} />
-    </group>
+    <section ref={ref} className="relative h-[220vh]">
+      <div className="sticky top-0 flex h-screen items-center justify-center px-6">
+        <div className="max-w-5xl">
+          <p className="mb-6 text-xs font-semibold uppercase tracking-[0.25em] text-white/50">O problema</p>
+          <p className="text-[1.9rem] font-semibold leading-[1.25] tracking-tight md:text-6xl md:leading-[1.15]">
+            {words.map((w, i) => {
+              const on = clamp(lit - i)
+              const hot = HOT.some((h) => w.startsWith(h))
+              return (
+                <span key={i} style={{ opacity: 0.14 + on * 0.86, color: hot && on > 0.9 ? '#ff7a7a' : undefined, transition: 'color .3s' }}>{w} </span>
+              )
+            })}
+          </p>
+        </div>
+      </div>
+    </section>
   )
 }
 
-/**
- * Glides the camera to the pose of the current chapter. The projection is shifted so the
- * subject sits beside the text card: to the right on wide screens, above it on phones
- * (where the camera also backs off, because the view is narrow).
- */
-function CameraRig({ step }: { step: number }) {
-  const { camera, size } = useThree()
-  const look = useRef(new THREE.Vector3(...chapters[0].look))
-  const still = reducedMotion()
-  const narrow = size.width < 768
-  useEffect(() => {
-    const cam = camera as THREE.PerspectiveCamera
-    if (narrow) cam.setViewOffset(size.width, size.height, 0, size.height * 0.2, size.width, size.height)
-    else cam.setViewOffset(size.width, size.height, -size.width * 0.18, 0, size.width, size.height)
-    cam.updateProjectionMatrix()
-  }, [camera, size.width, size.height, narrow])
-  useFrame((_, dt) => {
-    const c = chapters[step]
-    const target = new THREE.Vector3(...c.look)
-    const pos = new THREE.Vector3(...c.cam).sub(target).multiplyScalar(narrow ? 1.9 : 1).add(target)
-    const k = still ? 1 : 1 - Math.exp(-dt * 2.2)
-    camera.position.lerp(pos, k)
-    look.current.lerp(target, k)
-    camera.lookAt(look.current)
-  })
-  return null
+// ---- 3. showcase: pinned window, zooms into what the text talks about -----------------------
+
+interface Step {
+  kicker: string
+  title: string
+  text: string
+  img: string
+  url: string
+  /** Zoom: scale and the point of the screenshot it zooms into (percent). */
+  zoom: [number, number, number]
 }
 
-const P = {
-  globe: new THREE.Vector3(-9, 0, 0),
-  firewall: new THREE.Vector3(-6, 0, 0),
-  vps: new THREE.Vector3(-3, 0, 0),
-  backend: new THREE.Vector3(3, 0, 0),
-  db: new THREE.Vector3(3, 0, -2.6),
-  screen: new THREE.Vector3(6.4, 0.35, 1.3),
-  phone: new THREE.Vector3(6.4, 0, -1.4),
-}
-
-/** The whole system: attackers, firewall, VPS + agent, tunnel, SOC backend, database, dashboard, phone. */
-function SystemScene({ phase, labels }: { phase: Phase; labels: boolean }) {
-  const p = usePalette()
-  const attack = useMemo(() => makeCurve(P.globe, P.vps, 1.2), [])
-  const tunnel = useMemo(() => new THREE.LineCurve3(new THREE.Vector3(-2.2, 0, 0), new THREE.Vector3(2.2, 0, 0)), [])
-  const toDb = useMemo(() => makeCurve(P.backend, P.db, 0.3), [])
-  const toScreen = useMemo(() => makeCurve(P.backend, P.screen, 0.6), [])
-  const toPhone = useMemo(() => makeCurve(P.backend, P.phone, 0.6), [])
-  const after = (ph: Phase) => order.indexOf(phase) >= order.indexOf(ph)
-  const blocked = after('respond')
-  const focus = (...ph: Phase[]) => phase === 'all' || ph.includes(phase)
-
-  return (
-    <group>
-      <gridHelper args={[60, 60, p.line, p.line]} position={[0, -0.56, -10]} />
-
-      {/* Internet / attackers */}
-      <Globe position={P.globe} color={p.critical} />
-      {labels && <Label3D position={[P.globe.x, 1.2, 0]} title="Internet" detail="robôs tentando senhas" color={p.critical} dim={!focus('problem', 'respond')} />}
-      <Link3D curve={attack} color={p.critical} opacity={0.35} dashed />
-      <Particles curve={attack} color={p.critical} count={10} speed={0.3} stopAt={blocked ? 0.38 : 1} visible />
-
-      {/* Firewall */}
-      <mesh position={P.firewall}>
-        <boxGeometry args={[0.18, 1.5, 2.2]} />
-        <meshStandardMaterial color={blocked ? p.critical : p.good} transparent opacity={blocked ? 0.75 : 0.35}
-          emissive={blocked ? p.critical : p.good} emissiveIntensity={blocked ? 0.6 : 0.2} />
-      </mesh>
-      <StateRing color={blocked ? p.critical : p.good} radius={0.9} pulse={phase === 'respond'} />
-      {labels && <Label3D position={[P.firewall.x, 1.25, 0]} title="Firewall" detail={blocked ? 'atacante bloqueado' : 'nftables na VPS'} color={blocked ? p.critical : p.good} dim={!focus('respond')} />}
-
-      {/* VPS + agent */}
-      <group position={P.vps}>
-        <RoundedBox args={[1.4, 0.95, 1.4]} radius={0.12} smoothness={4}>
-          <meshStandardMaterial color={p.raised} emissive={p.hud} emissiveIntensity={phase === 'agent' ? 0.25 : 0.05} />
-        </RoundedBox>
-        {[-0.2, 0.05, 0.3].map((y) => (
-          <mesh key={y} position={[0, y - 0.05, 0.71]}>
-            <boxGeometry args={[1, 0.05, 0.02]} />
-            <meshBasicMaterial color={p.good} toneMapped={false} />
-          </mesh>
-        ))}
-        <AgentChip color={p.hud} active={phase === 'agent'} />
-        <StateRing color={p.hud} radius={1.15} />
-      </group>
-      {labels && <Label3D position={[P.vps.x, 1.55, 0]} title="Sua VPS + agente" detail="Go · 6 MB" color={p.hud} dim={!focus('problem', 'agent', 'tunnel')} />}
-
-      {/* Tunnel */}
-      <mesh position={[0, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.32, 0.32, 4.4, 32, 1, true]} />
-        <meshStandardMaterial color={p.hud} transparent opacity={after('tunnel') ? 0.18 : 0.06} side={THREE.DoubleSide} emissive={p.hud} emissiveIntensity={0.2} />
-      </mesh>
-      <Particles curve={tunnel} color={p.hud} count={8} speed={0.35} visible={after('tunnel')} />
-      <Particles curve={tunnel} color={p.warning} count={3} speed={0.45} reverse visible={phase === 'respond'} size={0.08} />
-      {labels && <Label3D position={[0, 0.85, 0]} title="Túnel Tailscale" detail="criptografado" color={p.hud} dim={!focus('tunnel')} />}
-
-      {/* SOC backend */}
-      <group position={P.backend}>
-        <RoundedBox args={[1.5, 1.1, 1.5]} radius={0.14} smoothness={4}>
-          <meshStandardMaterial color={p.raised} emissive={p.hud} emissiveIntensity={phase === 'detect' ? 0.3 : 0.06} />
-        </RoundedBox>
-        <RulesRings active={phase === 'detect'} color={p.hud} />
-        <StateRing color={p.hud} radius={1.2} />
-      </group>
-      {labels && <Label3D position={[P.backend.x, 1.65, 0]} title="SOC (backend)" detail="regras · incidentes · resposta" color={p.hud} dim={!focus('tunnel', 'detect', 'respond', 'alerts')} />}
-
-      {/* Database */}
-      <mesh position={P.db}>
-        <cylinderGeometry args={[0.55, 0.55, 0.9, 40]} />
-        <meshStandardMaterial color={p.raised} emissive={p.s1} emissiveIntensity={phase === 'detect' ? 0.3 : 0.06} />
-      </mesh>
-      <Link3D curve={toDb} color={p.line} />
-      <Particles curve={toDb} color={p.s1} count={3} speed={0.3} visible={after('detect')} />
-      {labels && <Label3D position={[P.db.x, 1.0, P.db.z]} title="PostgreSQL" detail="histórico" dim={!focus('detect')} />}
-
-      {/* Dashboard screen */}
-      <group position={P.screen} rotation={[0, -0.35, 0]}>
-        <RoundedBox args={[1.9, 1.15, 0.08]} radius={0.04} smoothness={4}>
-          <meshStandardMaterial color={p.surface} emissive={p.hud} emissiveIntensity={phase === 'alerts' ? 0.25 : 0.05} />
-        </RoundedBox>
-        {[0.32, 0.1, -0.12, -0.34].map((y, i) => (
-          <mesh key={y} position={[-0.25 + (i % 2) * 0.1, y, 0.05]}>
-            <boxGeometry args={[1.1 - i * 0.15, 0.08, 0.01]} />
-            <meshBasicMaterial color={i === 0 ? p.critical : p.line} toneMapped={false} />
-          </mesh>
-        ))}
-      </group>
-      <Link3D curve={toScreen} color={p.line} />
-      <Particles curve={toScreen} color={p.hud} count={3} speed={0.3} visible={after('alerts')} />
-      {labels && <Label3D position={[P.screen.x, 1.3, P.screen.z]} title="Painel" detail="React" dim={!focus('alerts')} />}
-
-      {/* Phone */}
-      <group position={P.phone}>
-        <RoundedBox args={[0.5, 0.95, 0.08]} radius={0.06} smoothness={4}>
-          <meshStandardMaterial color={p.surface} emissive={p.warning} emissiveIntensity={phase === 'alerts' ? 0.35 : 0.05} />
-        </RoundedBox>
-      </group>
-      <Link3D curve={toPhone} color={p.line} />
-      <Particles curve={toPhone} color={p.warning} count={2} speed={0.3} visible={after('alerts')} />
-      {labels && <Label3D position={[P.phone.x, 0.95, P.phone.z]} title="Telegram" detail="alerta no celular" dim={!focus('alerts')} />}
-    </group>
-  )
-}
-
-function Globe({ position, color }: { position: THREE.Vector3; color: string }) {
-  const ref = useRef<THREE.Mesh>(null)
-  const still = reducedMotion()
-  useFrame((_, dt) => {
-    if (ref.current && !still) ref.current.rotation.y += dt * 0.25
-  })
-  return (
-    <group position={position}>
-      <mesh ref={ref}>
-        <icosahedronGeometry args={[0.85, 2]} />
-        <meshStandardMaterial color={color} wireframe emissive={color} emissiveIntensity={0.25} />
-      </mesh>
-      <StateRing color={color} radius={1.1} pulse />
-    </group>
-  )
-}
-
-function AgentChip({ color, active }: { color: string; active: boolean }) {
-  const ref = useRef<THREE.Mesh>(null)
-  const still = reducedMotion()
-  useFrame(({ clock }) => {
-    if (!ref.current) return
-    ref.current.position.y = 0.72 + (still ? 0 : Math.sin(clock.getElapsedTime() * 2) * 0.05)
-    ref.current.rotation.y += still ? 0 : 0.01
-  })
-  return (
-    <mesh ref={ref} position={[0, 0.72, 0]}>
-      <octahedronGeometry args={[0.2, 0]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 1 : 0.4} />
-    </mesh>
-  )
-}
-
-function RulesRings({ active, color }: { active: boolean; color: string }) {
-  const ref = useRef<THREE.Group>(null)
-  const still = reducedMotion()
-  useFrame((_, dt) => {
-    if (ref.current && !still) ref.current.rotation.y += dt * (active ? 1.2 : 0.3)
-  })
-  return (
-    <group ref={ref} position={[0, 0.85, 0]}>
-      {[0.35, 0.5, 0.65].map((r, i) => (
-        <mesh key={r} rotation={[Math.PI / 2 + i * 0.35, i * 0.6, 0]}>
-          <torusGeometry args={[r, 0.015, 8, 48]} />
-          <meshBasicMaterial color={color} transparent opacity={active ? 0.9 : 0.35} toneMapped={false} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-// ---- demo application architecture (same model as the dashboard) -------------------------
-
-const day = 86_400_000
-const demoHost = {
-  id: 'vps-demo', status: 'ONLINE', lastSeen: new Date().toISOString(), firstSeen: new Date().toISOString(), heartbeatIntervalSeconds: 30,
-  metrics: { cpuPercent: 34, memPercent: 61, diskPercent: 72 },
-  posture: { firewall: { enabled: true, blockedIps: 3 }, ssh: { passwordAuthentication: 'no' }, failedUnits: [] },
-  openPorts: [
-    { proto: 'tcp', address: '0.0.0.0', port: 22, process: 'sshd', exe: '/usr/sbin/sshd' },
-    { proto: 'tcp', address: '0.0.0.0', port: 443, process: 'nginx', exe: '/usr/sbin/nginx' },
-    { proto: 'tcp', address: '0.0.0.0', port: 4444, process: 'kworkerd', exe: '/tmp/.x/kworkerd' },
-  ],
-} as unknown as Host
-
-const app = (name: string, pmId: number, health: ServiceView['health'], ports: number[], extra: Record<string, unknown> = {}) => ({
-  hostId: 'vps-demo', health, reasons: health === 'DOWN' ? ['caiu e o PM2 parou de reiniciar'] : [],
-  pm2: { name, pmId, pm2Home: '/root/.pm2', status: health === 'DOWN' ? 'errored' : 'online', ports, probe: health === 'DOWN' ? undefined : { ok: true, latencyMs: 30 + pmId * 12 }, ...extra },
-}) as unknown as ServiceView
-
-const demoServices: ServiceView[] = [
-  app('loja-api', 0, 'HEALTHY', [3000], { sites: [{ domains: ['loja.exemplo.com'], proxyPorts: [3000], tls: true, certificate: { notAfter: new Date(Date.now() + 60 * day).toISOString() }, configFile: 'loja' }] }),
-  app('site', 1, 'HEALTHY', [3001], { sites: [{ domains: ['exemplo.com'], proxyPorts: [3001], tls: true, certificate: { notAfter: new Date(Date.now() + 80 * day).toISOString() }, configFile: 'site' }] }),
-  app('worker-emails', 2, 'DOWN', [3002]),
+const STEPS: Step[] = [
+  { kicker: 'Visão geral', title: 'A situação inteira em uma frase', text: 'Verde é tudo tranquilo. Vermelho é ataque em andamento. Ao lado, uma nota de 0 a 100 que sobe quando os problemas são resolvidos.', img: shotOverview, url: 'vps-soc · visão geral', zoom: [1.75, 60, 38] },
+  { kicker: 'Prioridades', title: 'O que precisa de você, mais grave primeiro', text: 'Quatro números levam direto para a página certa, e a lista mostra os incidentes abertos em ordem de perigo.', img: shotOverview, url: 'vps-soc · visão geral', zoom: [1.55, 45, 88] },
+  { kicker: 'Incidentes', title: 'Cada ataque explicado em português', text: 'Quem, de onde, quantas vezes e o que fez depois de entrar. Escrito com os dados reais, não com códigos de log.', img: shotIncident, url: 'vps-soc · incidente #10', zoom: [1.6, 52, 24] },
+  { kicker: 'Contexto', title: 'Risco, origem e técnicas do MITRE ATT&CK', text: 'Cada incidente mostra o nível de risco, o IP e as técnicas de ataque envolvidas, com um botão para assumir a análise.', img: shotIncident, url: 'vps-soc · incidente #10', zoom: [1.6, 55, 50] },
+  { kicker: 'Mapa', title: 'Onde está o servidor e de onde vêm os ataques', text: 'Cada IP que tentou entrar vira um ponto no mapa, com uma linha até o servidor. Ao lado, os países que mais atacaram.', img: shotMap, url: 'vps-soc · servidores', zoom: [1.35, 50, 42] },
+  { kicker: 'Aplicações', title: 'O caminho até cada aplicação', text: 'Internet, firewall, servidor, domínios e aplicações. A peça vermelha é onde está o problema, e a lista acima diz o que fazer.', img: shotServices, url: 'vps-soc · aplicações', zoom: [1.3, 55, 62] },
+  { kicker: 'Resposta automática', title: 'O SOC se defende sozinho', text: 'Bloqueia o IP atacante no firewall em segundos. Ações delicadas, como encerrar um processo, esperam o seu clique.', img: shotResponse, url: 'vps-soc · resposta automática', zoom: [1.45, 62, 30] },
+  { kicker: 'Relatório', title: 'Um resumo pronto para o cliente', text: 'O período em uma página, em linguagem simples: ataques, bloqueios, países de origem e o que recomendamos fazer. Sai em PDF.', img: shotReport, url: 'vps-soc · relatório do cliente', zoom: [1.3, 60, 42] },
 ]
 
-function DemoApps({ visible }: { visible: boolean }) {
-  const data = useMemo(() => buildFlow({ host: demoHost, services: demoServices, attackers: { total: 18, breached: 0, blocked: 3 } }), [])
-  return <group visible={visible}><ArchScene data={data} labels={visible} /></group>
+function Showcase() {
+  const [active, setActive] = useState(0)
+  const refs = useRef<(HTMLDivElement | null)[]>([])
+  useEffect(() => {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) setActive(Number((e.target as HTMLElement).dataset.i))
+    }, { rootMargin: '-48% 0px -48% 0px' })
+    refs.current.forEach((el) => el && io.observe(el))
+    return () => io.disconnect()
+  }, [])
+  const s = STEPS[active]
+  const still = reducedMotion()
+
+  return (
+    <section className="relative">
+      <div className="mx-auto max-w-7xl px-5 pt-10 text-center md:px-10">
+        <Reveal>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">O painel</p>
+          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Feito para <GradientText>entender</GradientText>, não para decorar</h2>
+        </Reveal>
+      </div>
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] md:px-10">
+        {/* Pinned window (first in DOM so it sits on top on phones) */}
+        <div className="sticky top-16 z-10 order-first -mx-5 bg-[#07090d] px-5 pb-4 md:order-last md:top-0 md:mx-0 md:flex md:h-screen md:items-center md:bg-transparent md:px-0 md:pb-0">
+          <div className="relative w-full pt-2 md:pt-0">
+            <BrowserFrame url={s.url} className="w-full">
+              <div className="relative aspect-[16/10] overflow-hidden">
+                {STEPS.map((st, i) => (
+                  <img key={i} src={st.img} alt={i === active ? `${st.kicker}: ${st.title}` : ''} aria-hidden={i !== active}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    style={{
+                      opacity: i === active ? 1 : 0,
+                      transformOrigin: `${st.zoom[1]}% ${st.zoom[2]}%`,
+                      transform: `scale(${i === active ? st.zoom[0] : 1})`,
+                      transition: still ? 'none' : 'opacity .6s ease, transform 1.1s cubic-bezier(.2,.7,.2,1)',
+                    }} />
+                ))}
+              </div>
+            </BrowserFrame>
+            <div className="mt-4 hidden gap-1.5 md:flex" aria-hidden>
+              {STEPS.map((_, i) => (
+                <span key={i} className="h-1 flex-1 rounded-full" style={{ background: i <= active ? ACCENT : 'rgba(255,255,255,0.12)', transition: 'background .4s' }} />
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* Texts */}
+        <div className="md:py-[30vh]">
+          {STEPS.map((st, i) => (
+            <div key={i} ref={(el) => { refs.current[i] = el }} data-i={i} className="flex min-h-[70vh] items-center md:min-h-[80vh]">
+              <div style={{ opacity: i === active ? 1 : 0.25, transform: i === active ? 'none' : 'translateY(12px)', transition: 'opacity .5s, transform .5s' }}>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em]"><GradientText>{String(i + 1).padStart(2, '0')} · {st.kicker}</GradientText></p>
+                <h3 className="mt-3 text-3xl font-semibold leading-tight tracking-tight md:text-4xl">{st.title}</h3>
+                <p className="mt-4 max-w-md text-base leading-relaxed text-white/65 md:text-lg">{st.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ---- 4. how it works: pinned, scrolls sideways ----------------------------------------------
+
+const FLOW = [
+  { Icon: Cpu, title: 'O agente vigia a VPS', text: 'Um programa em Go de poucos megabytes lê logins, sudo, portas, processos, arquivos críticos e as aplicações do PM2.', chips: ['SSH e sudo', 'Portas', 'Arquivos', 'PM2'] },
+  { Icon: Lock, title: 'Envia por um túnel seguro', text: 'Os eventos vão pelo Tailscale para o SOC, que roda fora da VPS. Um invasor não consegue apagar o histórico.', chips: ['Criptografado', 'Fora da VPS'] },
+  { Icon: Radar, title: 'O SOC detecta e explica', text: 'Regras transformam eventos em incidentes com risco, MITRE ATT&CK e um texto dizendo o que aconteceu e o que fazer.', chips: ['Força bruta', 'Web shell', 'Chave SSH plantada'] },
+  { Icon: ShieldCheck, title: 'Reage em segundos', text: 'O agente bloqueia o atacante no firewall da VPS. Ações delicadas esperam a aprovação de uma pessoa.', chips: ['Bloqueio de IP', 'Com aprovação'] },
+  { Icon: Bell, title: 'E avisa quem precisa saber', text: 'Sirene no painel, notificação no navegador e mensagem no Telegram, mesmo com o painel fechado.', chips: ['Telegram', 'Navegador'] },
+]
+
+function HowItWorks() {
+  const [ref, p] = useSectionProgress<HTMLElement>()
+  const track = useRef<HTMLDivElement>(null)
+  const [shift, setShift] = useState(0)
+  useEffect(() => {
+    const measure = () => {
+      const el = track.current
+      if (el) setShift(Math.max(0, el.scrollWidth - window.innerWidth))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+  return (
+    <section ref={ref} className="relative mt-24 h-[360vh]">
+      <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
+        <div className="px-5 md:px-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">Como funciona</p>
+          <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">Do ataque ao alerta, <GradientText>em segundos</GradientText></h2>
+        </div>
+        <div className="relative mt-12">
+          <div className="absolute left-0 right-0 top-[38px] h-px bg-white/10" />
+          <div className="absolute left-0 top-[38px] h-px" style={{ width: `${p * 100}%`, background: ACCENT }} />
+          <div ref={track} className="flex gap-6 px-5 md:gap-8 md:px-16" style={{ transform: `translateX(${-p * shift}px)`, width: 'max-content' }}>
+            {FLOW.map((f, i) => {
+              const on = p * (FLOW.length - 0.3) >= i
+              return (
+                <article key={f.title} className="w-[78vw] max-w-[420px] shrink-0 md:w-[400px]">
+                  <span className="relative z-10 flex h-[76px] w-[76px] items-center justify-center rounded-2xl border transition-all duration-500"
+                    style={{ borderColor: on ? 'rgba(124,178,255,0.6)' : 'rgba(255,255,255,0.12)', background: on ? 'linear-gradient(135deg, rgba(59,130,246,0.35), rgba(124,58,237,0.35))' : '#0d1117' }}>
+                    <f.Icon size={30} className={on ? 'text-white' : 'text-white/40'} aria-hidden />
+                  </span>
+                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6 transition-opacity duration-500" style={{ opacity: on ? 1 : 0.35 }}>
+                    <p className="text-xs font-semibold text-white/40">PASSO {i + 1}</p>
+                    <h3 className="mt-2 text-2xl font-semibold tracking-tight">{f.title}</h3>
+                    <p className="mt-3 leading-relaxed text-white/65">{f.text}</p>
+                    <ul className="mt-4 flex flex-wrap gap-2">
+                      {f.chips.map((c) => <li key={c} className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/70">{c}</li>)}
+                    </ul>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ---- 5. numbers count up ------------------------------------------------------------------------
+
+function Counter({ to, suffix = '' }: { to: number; suffix?: string }) {
+  const [ref, seen] = useInView<HTMLSpanElement>()
+  const [n, setN] = useState(reducedMotion() ? to : 0)
+  useEffect(() => {
+    if (!seen || reducedMotion()) return
+    let raf = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      const t = clamp((now - start) / 1400)
+      setN(Math.round(to * (1 - Math.pow(1 - t, 3))))
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [seen, to])
+  return <span ref={ref} className="tnum">{n}{suffix}</span>
+}
+
+function Numbers() {
+  const items = [
+    { n: 26, s: '', label: 'tipos de detecção', hint: 'de força bruta a aplicação fora do ar' },
+    { n: 6, s: '', label: 'ações de defesa', hint: 'bloquear IP, encerrar processo, reiniciar…' },
+    { n: 30, s: 's', label: 'entre cada sinal de vida', hint: 'o silêncio do agente vira alerta' },
+    { n: 0, s: '', label: 'comandos de shell enviados', hint: 'o agente só executa ações validadas' },
+  ]
+  return (
+    <section className="mx-auto max-w-7xl px-5 py-32 md:px-10">
+      <Reveal>
+        <h2 className="max-w-3xl text-4xl font-semibold tracking-tight md:text-5xl">Pequeno no servidor, <GradientText>completo no painel</GradientText></h2>
+      </Reveal>
+      <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map((it, i) => (
+          <Reveal key={it.label} delay={i * 120} className="bg-[#07090d] p-8">
+            <p className="text-6xl font-semibold tracking-tight"><GradientText><Counter to={it.n} suffix={it.s} /></GradientText></p>
+            <p className="mt-3 font-medium">{it.label}</p>
+            <p className="mt-1 text-sm text-white/50">{it.hint}</p>
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ---- 6. gallery with parallax -------------------------------------------------------------------
+
+function Gallery() {
+  const [ref, p] = useSectionProgress<HTMLElement>()
+  const cols: { img: string; alt: string }[][] = [
+    [{ img: shotMap, alt: 'Mapa de ataques' }, { img: shotResponse, alt: 'Resposta automática' }],
+    [{ img: shotIncident, alt: 'Incidente explicado' }, { img: shotArchitecture, alt: 'Arquitetura das aplicações' }],
+    [{ img: shotReport, alt: 'Relatório do cliente' }, { img: shotServices, alt: 'Aplicações' }],
+  ]
+  const speeds = [-90, 80, -40]
+  return (
+    <section ref={ref} className="relative overflow-hidden py-24">
+      <div className="mx-auto max-w-7xl px-5 md:px-10">
+        <Reveal>
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">Telas reais</p>
+          <h2 className="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">Tudo o que você viu está no painel</h2>
+        </Reveal>
+      </div>
+      <div className="mx-auto mt-14 grid max-w-[1500px] grid-cols-1 gap-6 px-5 md:grid-cols-3 md:px-10">
+        {cols.map((col, c) => (
+          <div key={c} className="space-y-6" style={{ transform: `translateY(${(p - 0.5) * speeds[c]}px)` }}>
+            {col.map((x) => (
+              <BrowserFrame key={x.alt} url={x.alt}>
+                <img src={x.img} alt={x.alt} loading="lazy" className="block w-full" />
+              </BrowserFrame>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40" style={{ background: 'linear-gradient(0deg, #07090d, transparent)' }} />
+    </section>
+  )
+}
+
+// ---- 7. closing ---------------------------------------------------------------------------------
+
+function Closing({ standalone }: { standalone: boolean }) {
+  const stack = ['Go', 'Java 21 · Spring Boot', 'PostgreSQL', 'React · TypeScript', 'Docker', 'Tailscale']
+  return (
+    <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-24 text-center">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[70vh] w-[70vw] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-50 blur-[120px]"
+        style={{ background: 'radial-gradient(closest-side, rgba(124,58,237,0.5), rgba(59,130,246,0.25), transparent)' }} />
+      <div className="relative max-w-3xl">
+        <Reveal>
+          <h2 className="text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl">Seu servidor, <GradientText>vigiado de verdade</GradientText>.</h2>
+        </Reveal>
+        <Reveal delay={150}>
+          <p className="mx-auto mt-6 max-w-xl text-lg text-white/65">Tudo sobe com um único <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-base text-white">docker compose up</code>.</p>
+        </Reveal>
+        <Reveal delay={300}>
+          <ul className="mt-10 flex flex-wrap justify-center gap-2">
+            {stack.map((s) => <li key={s} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-sm text-white/75">{s}</li>)}
+          </ul>
+        </Reveal>
+        <Reveal delay={450}>
+          <div className="mt-12 flex flex-wrap justify-center gap-3">
+            {!standalone && (
+              <Link to="/" className="inline-flex items-center gap-2 rounded-full px-6 py-3 font-semibold hover:brightness-110" style={{ background: BUTTON }}>
+                Abrir o painel <ArrowRight size={17} aria-hidden />
+              </Link>
+            )}
+            <a href="https://github.com/ThaigoDev/vps-soc" target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 hover:bg-white/10">
+              <Github size={17} aria-hidden /> Código no GitHub
+            </a>
+            <a href="https://github.com/ThaigoDev/vps-soc/blob/main/docs/GUIA.md" target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 hover:bg-white/10">
+              <BookOpen size={17} aria-hidden /> Guia do projeto
+            </a>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
 }
