@@ -30,8 +30,8 @@ export default function Hosts() {
       {map.data && q.data && q.data.length > 0 && <MapCard data={map.data} hosts={q.data} />}
       {q.data?.map((h) => (
         <div key={h.id} id={h.id} className="scroll-mt-20 space-y-5">
-          <Card title={<><Workflow size={16} className="text-muted" aria-hidden /> Caminho da internet até as aplicações · {h.id}</>}
-            description="Cada caixa é uma etapa por onde um acesso passa. Verde funciona, amarelo pede atenção, vermelho é onde está o problema.">
+          <Card title={<><Workflow size={16} className="text-muted" aria-hidden /> Arquitetura em 3D · {h.id}</>}
+            description="O caminho de um acesso, da internet até as aplicações. Gire e clique nas peças: verde funciona, amarelo pede atenção, vermelho é onde está o problema.">
             <InfraFlow host={h} services={(services.data ?? []).filter((x) => x.hostId === h.id)} attackers={attackSummary(map.data)} />
           </Card>
           <HostCard host={h} geo={map.data?.servers.find((x) => x.hostId === h.id)} />
@@ -120,7 +120,7 @@ function LocationForm({ server, host }: { server: MapServer; host?: Host }) {
       <p className="mt-0.5 text-xs text-ink2">
         {waiting
           ? `Localizando ${server.ip}…`
-          : 'O SOC só conhece o endereço privado deste servidor. Informe o IP público (o que aparece no painel da hospedagem) para ele aparecer no mapa.'}
+          : <>O SOC não sabe o IP público deste servidor. O jeito mais fácil: coloque no <code className="font-mono">.env</code> do SOC a linha <code className="font-mono">SOC_SERVER_PUBLIC_IP=SEU_IP</code> e rode <code className="font-mono">docker compose up -d</code>. Ou digite aqui:</>}
       </p>
       {!waiting && (
         <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); save.mutate() }}>
@@ -255,7 +255,7 @@ function HostWhere({ geo }: { geo?: MapServer }) {
   return (
     <span className="inline-flex items-center gap-1">
       <MapPin size={12} aria-hidden /> {[g.city, countryName(g.countryCode, g.country)].filter(Boolean).join(', ')}
-      {g.org ? ` · ${g.org}` : ''} · IP {geo.ip}{geo.ipSource === 'MANUAL' ? ' (definido à mão)' : ''}
+      {g.org ? ` · ${g.org}` : ''} · IP {geo.ip}{geo.ipSource === 'ENV' ? ' (definido no .env)' : geo.ipSource === 'MANUAL' ? ' (definido no painel)' : ''}
     </span>
   )
 }

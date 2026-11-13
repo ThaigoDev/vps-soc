@@ -1,12 +1,13 @@
-import { useNavigate } from 'react-router-dom'
+import { Suspense, lazy, useState } from 'react'
+import { webglAvailable } from './three/support'
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import type { Host, ServiceView, Site } from '../api'
 
 /*
- * Infrastructure flow for one server, left to right, the way a request travels:
+ * Infrastructure path for one server, left to right, the way a request travels:
  *   Internet → Firewall → Server → Entrances (domains and public ports) → Applications
- * Every box is colored by its own state, and the links leading to a broken box turn red,
- * so "where is the problem" is visible at a glance. Plain SVG, no layout library.
+ * buildFlow() works out each piece and its state; InfraFlow lists the problems in words and
+ * shows the same path as an interactive 3D model (three/AppArchitecture3D, loaded on demand).
  */
 
 type State = 'ok' | 'warn' | 'bad' | 'off'
@@ -29,17 +30,8 @@ const stateStyle: Record<State, { color: string; label: string }> = {
 }
 
 const COLS = ['Internet', 'Firewall', 'Servidor', 'Entradas', 'Aplicações']
-const NW = 212
-const NH = 60
-const GAP_X = 44
-const GAP_Y = 16
-const TOP = 34
 
 const SUSPICIOUS_DIRS = ['/tmp/', '/var/tmp/', '/dev/shm/']
-
-function trunc(s: string, n: number) {
-  return s.length > n ? `${s.slice(0, n - 1)}…` : s
-}
 
 export interface FlowInput {
   host: Host
@@ -157,30 +149,20 @@ export function buildFlow({ host, services, attackers }: FlowInput) {
   return { nodes, links }
 }
 
+const ArchitectureView = lazy(() => import('./three/AppArchitecture3D'))
+
+/** Problems in plain language, then the interactive 3D model of the same path. */
 export function InfraFlow(props: FlowInput) {
-  const navigate = useNavigate()
-  const { nodes, links } = buildFlow(props)
-  const cols = COLS.map((_, c) => nodes.filter((n) => n.col === c))
-  const rows = Math.max(...cols.map((c) => c.length), 1)
-  const height = TOP + rows * NH + (rows - 1) * GAP_Y + 8
-  const width = COLS.length * NW + (COLS.length - 1) * GAP_X
-
-  const pos = new Map<string, { x: number; y: number }>()
-  cols.forEach((col, c) => {
-    const block = col.length * NH + (col.length - 1) * GAP_Y
-    const start = TOP + (rows * NH + (rows - 1) * GAP_Y - block) / 2
-    col.forEach((n, i) => pos.set(n.id, { x: c * (NW + GAP_X), y: start + i * (NH + GAP_Y) }))
-  })
-  const byId = new Map(nodes.map((n) => [n.id, n]))
-  const problems = nodes.filter((n) => n.problem)
-
+  const data = buildFlow(props)
+  const problems = data.nodes.filter((n) => n.problem)
+  const [gl] = useState(webglAvailable)
   return (
     <div>
       {problems.length === 0 ? (
         <p className="mb-3 flex items-center gap-2 text-sm text-good"><CheckCircle2 size={16} aria-hidden /> Nenhum problema no caminho da internet até as aplicações.</p>
       ) : (
         <ul className="mb-4 space-y-1.5">
-          {problems.sort((a, b) => (a.state === 'bad' ? 0 : 1) - (b.state === 'bad' ? 0 : 1)).map((n) => (
+          {[...problems].sort((a, b) => (a.state === 'bad' ? 0 : 1) - (b.state === 'bad' ? 0 : 1)).map((n) => (
             <li key={n.id} className="flex items-start gap-2 text-sm">
               {n.state === 'bad'
                 ? <XCircle size={16} className="mt-0.5 shrink-0 text-critical" aria-label="problema" />
@@ -190,53 +172,20 @@ export function InfraFlow(props: FlowInput) {
           ))}
         </ul>
       )}
-      <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full min-w-[820px]" role="img"
-          aria-label={`Fluxo da infraestrutura de ${props.host.id}: ${problems.length} ponto(s) com problema`}>
+      {gl ? (
+        <Suspense fallback={<div className="flex h-[460px] items-center justify-center rounded-xl border border-line text-sm text-muted">Carregando modelo 3D…</div>}>
+          <ArchitectureView data={data} />
+        </Suspense>
+      ) : (
+        <ol className="grid gap-2 sm:grid-cols-5">
           {COLS.map((c, i) => (
-            <text key={c} x={i * (NW + GAP_X) + NW / 2} y={14} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--muted)"
-              style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {c}
-            </text>
+            <li key={c} className="rounded-lg border border-line p-2 text-xs">
+              <p className="mb-1 font-semibold text-muted">{c}</p>
+              {data.nodes.filter((n) => n.col === i).map((n) => <p key={n.id}>{n.title} · {stateStyle[n.state].label}</p>)}
+            </li>
           ))}
-          {links.map(([a, b]) => {
-            const pa = pos.get(a), pb = pos.get(b), nb = byId.get(b)
-            if (!pa || !pb || !nb) return null
-            const x1 = pa.x + NW, y1 = pa.y + NH / 2, x2 = pb.x, y2 = pb.y + NH / 2
-            const mx = (x1 + x2) / 2
-            const broken = nb.state === 'bad'
-            return (
-              <path key={`${a}->${b}`} d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`} fill="none"
-                stroke={broken ? 'var(--critical)' : nb.state === 'warn' ? 'var(--warning)' : 'var(--axis)'}
-                strokeWidth={broken ? 2.2 : 1.6} strokeDasharray={broken ? '6 5' : undefined} className={broken ? 'flow-dash' : ''} />
-            )
-          })}
-          {nodes.map((n) => {
-            const p = pos.get(n.id)!
-            const st = stateStyle[n.state]
-            return (
-              <g key={n.id} transform={`translate(${p.x},${p.y})`} onClick={() => n.to && navigate(n.to)}
-                className={n.to ? 'cursor-pointer' : ''} role={n.to ? 'link' : undefined}>
-                <title>{`${n.title}: ${n.detail}${n.problem ? ` — ${n.problem}` : ''}`}</title>
-                <rect width={NW} height={NH} rx={10} fill="var(--surface)" stroke={n.state === 'ok' || n.state === 'off' ? 'var(--line)' : st.color}
-                  strokeWidth={n.state === 'bad' ? 2 : 1.2} />
-                <rect width={5} height={NH - 16} x={0} y={8} rx={2.5} fill={st.color} />
-                <circle cx={NW - 14} cy={14} r={5} fill={st.color} />
-                <text x={16} y={25} fontSize={13.5} fontWeight={600} fill="var(--ink)">{trunc(n.title, 24)}</text>
-                <text x={16} y={44} fontSize={11.5} fill="var(--ink-2)">{trunc(n.detail, 33)}</text>
-              </g>
-            )
-          })}
-        </svg>
-      </div>
-      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink2">
-        {(['ok', 'warn', 'bad'] as State[]).map((s) => (
-          <li key={s} className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: stateStyle[s].color }} /> {stateStyle[s].label === 'ok' ? 'Funcionando' : stateStyle[s].label === 'atenção' ? 'Atenção' : 'Problema'}
-          </li>
-        ))}
-        <li className="text-muted">Clique em uma caixa para ver os detalhes.</li>
-      </ul>
+        </ol>
+      )}
     </div>
   )
 }

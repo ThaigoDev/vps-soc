@@ -18,6 +18,9 @@ detecta, correlaciona e abre incidentes (com MITRE ATT&CK), e um dashboard React
 O backend roda **fora** da VPS monitorada. Se a VPS for comprometida, o atacante não consegue
 apagar o histórico, e o próprio silêncio do agente vira um incidente (`AGENT_OFFLINE`).
 
+> **Apresentação do projeto:** abra `/apresentacao` no painel (sem login) para um tour em 3D
+> com scroll-telling.
+>
 > **Novo por aqui?** Leia o [Guia do VPS-SOC](docs/GUIA.md): explica em linguagem simples o
 > que o projeto faz, como rodar, um tour pelo painel e os problemas mais comuns.
 

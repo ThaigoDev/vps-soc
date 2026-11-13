@@ -444,7 +444,7 @@ export interface MapServer {
   hostId: string
   status: 'ONLINE' | 'OFFLINE'
   ip?: string
-  ipSource: 'MANUAL' | 'AGENT' | 'CONNECTION'
+  ipSource: 'ENV' | 'MANUAL' | 'AGENT' | 'CONNECTION'
   publicIp: boolean
   geo?: GeoInfo
 }

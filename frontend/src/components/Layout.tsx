@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useIsFetching, useQuery } from '@tanstack/react-query'
 import {
-  Activity, BarChart3, Boxes, FileText, HelpCircle, LayoutDashboard, LogOut, Menu, Moon, Server, Shield, ShieldCheck, Siren, Sun, X,
+  Activity, BarChart3, Boxes, FileText, Presentation, HelpCircle, LayoutDashboard, LogOut, Menu, Moon, Server, Shield, ShieldCheck, Siren, Sun, X,
 } from 'lucide-react'
 import { api, type Host, type ServiceView, type Summary } from '../api'
 import { AlertMenu, useAlertSettings } from './Alerts'
@@ -195,6 +195,10 @@ function Sidebar({ onLogout }: { onLogout: () => void }) {
       </nav>
 
       <div className="border-t border-line p-3">
+        <a href="/apresentacao" target="_blank" rel="noreferrer"
+          className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-ink2 hover:bg-raised hover:text-ink">
+          <Presentation size={17} className="text-muted" aria-hidden /> Apresentação do projeto
+        </a>
         <NavLink to="/help"
           className={({ isActive }) => `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm ${isActive ? 'bg-raised font-semibold text-ink' : 'text-ink2 hover:bg-raised hover:text-ink'}`}>
           <HelpCircle size={17} className="text-muted" aria-hidden /> Ajuda e glossário
